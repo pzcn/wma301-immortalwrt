@@ -6,6 +6,7 @@ Only writes inside the downloaded, disposable upstream checkout.
 """
 from __future__ import annotations
 import argparse
+import re
 from pathlib import Path
 import shutil
 
@@ -45,7 +46,8 @@ def change(path: Path, old: str, new: str):
 
 def inject_case(path: Path, func: str, body: str):
     src=path.read_text()
-    first=src.index(func+"() {") if func+"() {" in src else -1
+    match=re.search(r"(?m)^"+re.escape(func)+r"\(\)\s*\{",src)
+    first=match.start() if match else -1
     need(first>=0, f"missing function {func}: {path}")
     part=src[first:]
     at=part.find('\tcase "$board" in')

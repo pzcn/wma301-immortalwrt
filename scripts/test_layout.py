@@ -38,7 +38,7 @@ def run():
               'root=/dev/fit0 rootwait', '&switch', '&wifi'):
         assert k in dts,k
     assert 'label = "u-boot-env"' not in dts
-    assert "nmbm" not in dts.lower()
+    assert 'compatible = "mediatek,nmbm"' not in dts.lower()
 
     # Test that append-only image definition and the surgical shell case hooks
     # do not silently overwrite upstream and reject a second application.

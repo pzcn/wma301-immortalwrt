@@ -38,6 +38,8 @@ def run():
               'root=/dev/fit0 rootwait', '&switch', '&wifi'):
         assert k in dts,k
     assert 'label = "u-boot-env"' not in dts
+    assert "<&macaddr_factory_1c 3>" in dts, "WAN must be base+3 (OEM)"
+    assert "<&macaddr_factory_1c 1>" not in dts, "+1 is the 2.4G radio MAC"
     assert 'compatible = "mediatek,nmbm"' not in dts.lower()
 
     # Test that append-only image definition and the surgical shell case hooks
@@ -53,7 +55,13 @@ def run():
             'platform_do_upgrade() {\n\tlocal board=$(board_name)\n\tcase "$board" in\n'
             '\tfoo)\n\t\ttrue\n\t\t;;\n\tesac\n}\n'
             'platform_check_image() {\n\tlocal board=$(board_name)\n\tcase "$board" in\n'
-            '\tfoo)\n\t\ttrue\n\t\t;;\n\tesac\n}\n'
+            '\tfoo)\n\t\ttrue\n\t\t;;\n\tesac\n}\n',
+          "package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic":
+            'case "$board" in\nfoo)\n\tubootenv_add_ubi_default\n\t;;\nesac\n',
+          "package/boot/uboot-tools/uboot-envtools/files/uboot-envtools.sh":
+            'ubootenv_add_ubi_default() {\n\ttrue\n}\n',
+          "target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac":
+            'board=$(board_name)\n\ncase "$board" in\n\tfoo)\n\t\ttrue\n\t\t;;\nesac\n',
         }
         for name,content in paths.items():
             p=base/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(content)
@@ -65,6 +73,12 @@ def run():
         assert nw.count("tplink,wma301-v2)")==1
         up=(base/"target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh").read_text()
         assert up.count("tplink,wma301-v2)")==2
+        env=(base/"package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic").read_text()
+        assert env.count("tplink,wma301-v2)")==1 and env.count("ubootenv_add_ubi_default")==2
+        wm=(base/"target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac").read_text()
+        assert wm.count("tplink,wma301-v2)")==1
+        assert "mtd_get_mac_binary factory_info 0x1c" in wm
+        assert "macaddr_add $addr 1" in wm and "macaddr_add $addr 2" in wm
         try:
             prepare(base)
         except RuntimeError:

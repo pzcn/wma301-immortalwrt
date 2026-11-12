@@ -201,7 +201,8 @@
 		port@3 {
 			reg = <3>;
 			label = "wan";
-			nvmem-cells = <&macaddr_factory_1c 1>;
+			/* OEM: LAN +0, 2.4G +1, 5G +2, WAN +3 */
+			nvmem-cells = <&macaddr_factory_1c 3>;
 			nvmem-cell-names = "mac-address";
 		};
 

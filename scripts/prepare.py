@@ -18,7 +18,8 @@ define Device/tplink_wma301-v2
   DEVICE_DTS := mt7981b-tplink-wma301-v2
   DEVICE_DTS_DIR := ../dts
   SUPPORTED_DEVICES := tplink,wma301-v2
-  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \\
+	uboot-envtools
   BLOCKSIZE := 128k
   PAGESIZE := 2048
   UBINIZE_OPTS := -E 5
@@ -44,11 +45,15 @@ def change(path: Path, old: str, new: str):
     need(src.count(old)==1, f"Upstream hook changed: {path}: {old!r} appeared {src.count(old)} times")
     path.write_text(src.replace(old,new,1))
 
-def inject_case(path: Path, func: str, body: str):
+def inject_case(path: Path, func: str | None, body: str):
+    """Insert body right after the first `case "$board" in` (inside func, or top level if func is None)."""
     src=path.read_text()
-    match=re.search(r"(?m)^"+re.escape(func)+r"\(\)\s*\{",src)
-    first=match.start() if match else -1
-    need(first>=0, f"missing function {func}: {path}")
+    if func is None:
+        first=0
+    else:
+        match=re.search(r"(?m)^"+re.escape(func)+r"\(\)\s*\{",src)
+        first=match.start() if match else -1
+        need(first>=0, f"missing function {func}: {path}")
     part=src[first:]
     case_match=re.search(r'(?m)^\s*case\s+(?:"\$board"|\$board)\s+in',part)
     need(case_match is not None, f"cannot locate board case inside {func}")
@@ -94,6 +99,26 @@ def prepare(upstream: Path):
                 '\ttplink,wma301-v2)\n\t\tfit_do_upgrade "$1"\n\t\t;;')
     inject_case(platform,"platform_check_image",
                 '\ttplink,wma301-v2)\n\t\tfit_check_image "$1"\n\t\treturn $?\n\t\t;;')
+
+    # fw_printenv / fw_setenv: U-Boot env lives in UBI volumes ubootenv/ubootenv2 (0x1f000 = 124k).
+    envtools=upstream/"package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic"
+    need(envtools.is_file(),"missing uboot-envtools mediatek_filogic")
+    src=envtools.read_text()
+    need("tplink,wma301-v2" not in src,"upstream envtools support changed")
+    need("ubootenv_add_ubi_default()" in (envtools.parent/"uboot-envtools.sh").read_text(),
+         "upstream removed ubootenv_add_ubi_default")
+    inject_case(envtools,None,'tplink,wma301-v2)\n\tubootenv_add_ubi_default\n\t;;')
+
+    # Wi-Fi MAC as OEM: base=factory_info@0x1c, 2.4G=+1, 5G=+2 (LAN=+0, WAN=+3 in DTS).
+    wifimac=upstream/"target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac"
+    need(wifimac.is_file(),"missing 11_fix_wifi_mac")
+    need("tplink,wma301-v2" not in wifimac.read_text(),"upstream wifi mac support changed")
+    inject_case(wifimac,None,
+                '\ttplink,wma301-v2)\n'
+                '\t\taddr=$(mtd_get_mac_binary factory_info 0x1c)\n'
+                '\t\t[ "$PHYNBR" = "0" ] && macaddr_add $addr 1 > /sys${DEVPATH}/macaddress\n'
+                '\t\t[ "$PHYNBR" = "1" ] && macaddr_add $addr 2 > /sys${DEVPATH}/macaddress\n'
+                '\t\t;;')
 
     need('label = "ubi";' in (dest/"mt7981b-tplink-wma301-v2-common.dtsi").read_text(),
          "missing Linux UBI partition")

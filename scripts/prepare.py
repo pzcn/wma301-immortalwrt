@@ -16,6 +16,7 @@ define Device/tplink_wma301-v2
   DEVICE_MODEL := WMA301 v2.0 (OEM BL2/BL31 + custom BL33)
   DEVICE_DTS := mt7981b-tplink-wma301-v2
   DEVICE_DTS_DIR := ../dts
+  SUPPORTED_DEVICES := tplink,wma301-v2
   DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
   BLOCKSIZE := 128k
   PAGESIZE := 2048

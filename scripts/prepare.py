@@ -50,9 +50,10 @@ def inject_case(path: Path, func: str, body: str):
     first=match.start() if match else -1
     need(first>=0, f"missing function {func}: {path}")
     part=src[first:]
-    at=part.find('\tcase "$board" in')
-    need(at>=0, f"cannot locate board case inside {func}")
-    hook='\tcase "$board" in'
+    case_match=re.search(r'(?m)^\s*case\s+(?:"\$board"|\$board)\s+in',part)
+    need(case_match is not None, f"cannot locate board case inside {func}")
+    hook=case_match.group(0)
+    at=case_match.start()
     pre=src[:first]
     rest=src[first:]
     need("tplink,wma301-v2" not in rest[:at+len(hook)], "board already provided")

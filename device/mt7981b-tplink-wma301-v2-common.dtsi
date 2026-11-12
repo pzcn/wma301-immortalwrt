@@ -88,8 +88,7 @@
 		compatible = "spi-nand";
 		reg = <0>;
 
-		/* 26 MHz: 52 MHz left occasional uncorrectable on-die ECC parity (ESMT) */
-		spi-max-frequency = <26000000>;
+		spi-max-frequency = <52000000>;
 
 		spi-cal-enable;
 		spi-cal-mode = "read-data";

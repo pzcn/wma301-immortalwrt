@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline OTA provenance tests: wrong board, downgrade ID, hash and channel."""
+"""Offline OTA provenance tests: wrong board, source ID, hash and single feed."""
 from __future__ import annotations
 
 import json
@@ -38,8 +38,10 @@ with TemporaryDirectory() as folder:
         (dest / "manifest.json").write_text(json.dumps(manifest))
         (dest / "SHA256SUMS").write_text(f"{sha256(image)}  {source_image}\n")
     save()
-    data = metadata(dest, 12345, source, "testing", dest / "ota.json")
-    assert data["tag"] == "wma301-ota-testing-r12345"
+    data = metadata(dest, 12345, source, dest / "ota.json")
+    assert data["tag"] == "wma301-ota-r12345"
+    assert data["schema"] == 3 and "channel" not in data
+    assert data["hardware_validation"] == "NOT_TESTED"
     assert data["image"] == IMAGE and data["source_image"] == source_image
     assert data["repository"] == REPO
     assert data["auto_upgrade"] is False
@@ -54,25 +56,18 @@ with TemporaryDirectory() as folder:
         manifest.update(mismatch)
         save()
         try:
-            metadata(dest, 12345, source, "testing", dest / "ota.json")
+            metadata(dest, 12345, source, dest / "ota.json")
         except ValueError:
             pass
         else:
             raise AssertionError(f"Invalid OTA release accepted: {mismatch}")
         manifest.update(original)
     save()
-    for wrong in ("other", ""):
-        try:
-            metadata(dest, 12345, source, wrong, dest / "ota.json")
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Invalid channel accepted")
     image.write_bytes(b"R" * 1_000_100)
     try:
-        metadata(dest, 12345, source, "stable", dest / "ota.json")
+        metadata(dest, 12345, source, dest / "ota.json")
     except ValueError:
         pass
     else:
         raise AssertionError("Modified firmware accepted")
-print("WMA301 OTA identity, source, digest and channel checks: PASS")
+print("WMA301 OTA identity, source, digest and single-feed checks: PASS")

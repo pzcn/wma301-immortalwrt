@@ -118,7 +118,7 @@ exit 0
     remote["tag"] = "wma301-ota-r99999"
     (root / "fixtures/ota.json").write_text(json.dumps(remote))
     result = call("status")
-    assert "does not match" in json.loads(result.stdout)["error"]
+    assert "tag/build mismatch" in json.loads(result.stdout)["error"]
     # No real /sbin/sysupgrade ever ran (stub accepts -T only).
     assert "UNSAFE" not in (root / "upgrade.log").read_text()
 print("WMA301 OTA mocked single feed, SHA256, download, device guard, no auto-flash: PASS")

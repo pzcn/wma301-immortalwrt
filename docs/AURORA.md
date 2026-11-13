@@ -42,6 +42,13 @@ uci -q commit luci
 
 随后清理浏览器缓存并重新打开 LuCI。主题本身不提供新的 U-Boot/网络恢复能力。
 
+## 离线构建验收记录
+
+- **2026-11-13：[GitHub Actions #43388089333](https://github.com/pzcn/wma301-immortalwrt/actions/runs/43388089333) 全部成功。**
+- 官方 ImageBuilder 快速路径验证 Aurora v1.4.0 固定 SHA 后，成功注入 **30 个主题文件**，生成 WMA301 sysupgrade FIT；FIT/DTS/NAND 检验和 `manifest.json` 的 `bundled_theme` 元数据检查通过。
+- 实验 Artifact ZIP 大小约 **30.8 MB**，只上传 Actions Artifact，不发布 Release、不自动刷机。
+- 完整源码双 FIT 后备仍未因本次主题改动完成实测；Aurora 在 WMA301 实机 LuCI 中的浏览器兼容性尚待验证。
+
 ## 验收标准
 
 - `python3 scripts/test_aurora.py` 校验文件映射、模板版本戳、文件冲突与符号链接。

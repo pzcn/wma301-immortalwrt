@@ -36,7 +36,7 @@ jobs:
       - name: Install host tools and prepare disk
         run: |
           set -euo pipefail
-          sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/share/dotnet /opt/ghc || true
+          # Keep the preinstalled runner intact; deleting toolchains costs more than the image repack.
           missing=()
           for tool in zstd gcc cpp make perl python3 rsync xz curl git unzip file gzip; do
             command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")

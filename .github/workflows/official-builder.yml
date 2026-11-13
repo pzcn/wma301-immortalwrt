@@ -1,0 +1,127 @@
+name: WMA301 | Official ImageBuilder fast-path (experimental)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/official-builder.yml'
+      - 'scripts/official_builder.py'
+      - 'scripts/verify_official.py'
+      - 'scripts/test_official_builder.py'
+      - 'device/**'
+permissions:
+  contents: read
+concurrency:
+  group: official-builder
+  cancel-in-progress: false
+jobs:
+  offline-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests and existing device geometry checks
+        run: |
+          python3 -m py_compile scripts/official_builder.py scripts/verify_official.py
+          python3 scripts/test_official_builder.py
+          python3 scripts/test_layout.py
+  fast-build:
+    needs: offline-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      BASE: https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/mediatek/filogic
+      GH_TOKEN: { github.token }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host tools and prepare disk
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/share/dotnet /opt/ghc || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd gcc make binutils perl python3 rsync xz-utils curl git unzip file
+          df -h /
+      - name: Resolve exact official binary revision
+        id: source
+        run: |
+          set -euo pipefail
+          mkdir -p official-index downloads kernel-source
+          curl -fL --retry 3 -o official-index/version.buildinfo "$BASE/version.buildinfo"
+          curl -fL --retry 3 -o official-index/sha256sums "$BASE/sha256sums"
+          python3 scripts/official_builder.py resolve --index official-index --output official-provenance.json
+          SHORT="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["source_revision"])')"
+          SHA="$(gh api "repos/immortalwrt/immortalwrt/commits/$SHORT" --jq .sha)"
+          [[ "$SHA" == "$SHORT"* ]]
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Download and verify official ImageBuilder
+        run: |
+          set -euo pipefail
+          IB="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder"])')"
+          EXPECTED="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder_sha256"])')"
+          curl -fL --retry 3 --retry-delay 5 -o "downloads/$IB" "$BASE/$IB"
+          printf '%s  %s\n' "$EXPECTED" "downloads/$IB" | sha256sum -c -
+          mkdir builder-unpacked
+          tar --zstd -xf "downloads/$IB" -C builder-unpacked
+          test "$(find builder-unpacked -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
+      - name: Fetch exact matching ImmortalWrt integration source
+        env:
+          SOURCE_SHA: { steps.source.outputs.sha }
+        run: |
+          set -euo pipefail
+          git init -q upstream
+          git -C upstream remote add origin https://github.com/immortalwrt/immortalwrt.git
+          git -C upstream fetch -q --depth 1 origin "$SOURCE_SHA"
+          git -C upstream -c advice.detachedHead=false checkout -q --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Fetch checksum-matched Linux device-tree headers only
+        id: headers
+        run: |
+          set -euo pipefail
+          KFILE=upstream/target/linux/generic/kernel-6.12
+          PATCH="$(sed -nE 's/^LINUX_VERSION-6\.12 = \.([0-9]+)$/\1/p' "$KFILE")"
+          [[ "$PATCH" =~ ^[0-9]+$ ]]
+          VERSION="6.12.$PATCH"
+          EXPECTED="$(awk -F' = ' -v key="LINUX_KERNEL_HASH-$VERSION" '$1 == key {print $2}' "$KFILE")"
+          [[ "$EXPECTED" =~ ^[a-f0-9]{64}$ ]]
+          curl -fL --retry 3 --retry-delay 3 -o kernel-source/kernel.tar.xz \
+            "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$VERSION.tar.xz"
+          printf '%s  %s\n' "$EXPECTED" kernel-source/kernel.tar.xz | sha256sum -c -
+          tar -xJf kernel-source/kernel.tar.xz -C kernel-source \
+            "linux-$VERSION/include/dt-bindings"
+          echo "path=$PWD/kernel-source/linux-$VERSION/include" >> "$GITHUB_OUTPUT"
+      - name: Inject local device profile and prebuilt kernel
+        env:
+          SOURCE_SHA: { steps.source.outputs.sha }
+          HEADERS: { steps.headers.outputs.path }
+        run: |
+          set -euo pipefail
+          BUILDER="$(find "$PWD/builder-unpacked" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          python3 scripts/official_builder.py stage --builder "$BUILDER" \
+            --upstream "$PWD/upstream" --overlay "$PWD/wma301-overlay" \
+            --expected-source "$SOURCE_SHA" --kernel-headers "$HEADERS"
+          echo "BUILDER=$BUILDER" >> "$GITHUB_ENV"
+      - name: ImageBuilder repack (no kernel compilation)
+        run: |
+          set -euo pipefail
+          mkdir -p "$PWD/images"
+          make -C "$BUILDER" info > builder-info.log
+          grep -q 'tplink_wma301-v2:' builder-info.log
+          make -C "$BUILDER" image PROFILE=tplink_wma301-v2 \
+            PACKAGES=luci FILES="$PWD/wma301-overlay" BIN_DIR="$PWD/images" \
+            > repack.log 2>&1 || { tail -n 200 repack.log; exit 1; }
+          tail -n 35 repack.log
+      - name: Verify WMA301 FIT geometry, hashes and source metadata
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_official.py --images images --output dist \
+            --provenance official-provenance.json --local-sha "$GITHUB_SHA"
+          (cd dist && sha256sum -c SHA256SUMS)
+          test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 1
+      - name: Upload experimental artifact only, never publish Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: WMA301_OFFICIAL_BUILDER_EXPERIMENT
+          path: |
+            dist/
+            official-provenance.json
+          if-no-files-found: error
+          retention-days: 14

@@ -6,6 +6,8 @@
 
 2026-11-13，[官方 Builder 快速构建 #43383051969](https://github.com/pzcn/wma301-immortalwrt/actions/runs/43383051969) 已通过全套 CI：预编译官方 Linux Image、WMA301 DTB 单独编译、SquashFS FIT 打包、FIT 哈希和 NAND/UBI 分区布局离线校验、Artifact 上传。
 
+**缓存回归（2026-11-13）**：首次新流程 [#43384547653](https://github.com/pzcn/wma301-immortalwrt/actions/runs/43384547653) 用时约 2 分 33 秒，成功写入缓存；随后 [#43384953584](https://github.com/pzcn/wma301-immortalwrt/actions/runs/43384953584) 用时约 1 分 32 秒，完整 CI 通过。第二次日志确认 **1023 MB 官方 ImageBuilder** 和 **142 MB 匹配 Linux 源码**均为 Cache hit，且成功记录了构建指纹。该对比仅反映本次两轮 Actions，不是固定速度保证。定时跳过策略尚需下一次实际 `schedule` 触发后确认。
+
 这只代表**代码和产物的离线验证**，不代表设备已通过启动、sysupgrade、SPI-NAND 长期写入或掉电持久化测试。
 
 ## 二、默认自动构建（本轮实施）
@@ -71,7 +73,7 @@
 | 优先级 | 状态 | 任务 | 验收 |
 | --- | --- | --- | --- |
 | P0 | ✅ 已验证 | 复用官方 Builder、独立 DTS、生成 FIT、离线验证 | 见 #43383051969 |
-| P1 | 🧪 本次实现，需验证 | Builder/kernel SHA256 缓存；每日检查；同周成功去重；包列表与 manifest | Actions 打包全绿；相同版本再次运行命中缓存；定时重复不重包；变更能触发 |
+| P1 | 🟡 缓存命中与双轮 CI 已验证；定时去重待实测 | Builder/kernel SHA256 缓存；每日检查；同周成功去重；包列表与 manifest | #43384547653 与 #43384953584 全绿、缓存命中；仍需验证下一次 schedule 跳过逻辑 |
 | P2 | ⬜ 待实施 | 用**匹配官方 Builder 的 SDK**只补编官方没有的第三方 APK | 不修改内核 ABI，不跨源安装；无缺包不下载 SDK |
 | P3 | ⬜ 待研究 | 减少 recovery 的完整源码构建需求 | 如果不能安全复用 initramfs 生成，继续保留完整后备 |
 | P4 | ⬜ 待实机验收 | 启动、LAN/WAN、Wi-Fi 校准、MAC、四 UBI 卷、升级保留配置、SPI-NAND ECC、冷启动及恢复 | 多轮实机升级/断电、存储和环境卷保持一致 |

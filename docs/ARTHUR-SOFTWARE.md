@@ -16,10 +16,10 @@
 - LuCI + 简体中文、文件管理、ttyd 终端、nlbwmon、Wi-Fi 历史、IRQBalance、LLDP、PBR、定时重启。
 - WireGuard、tcpdump、ip-full、conntrack、curl/jsonfilter 等网络维护工具。
 - SQM + BCP38 及其中文包；这里是 MT7981 原生软件队列，不包含亚瑟 Qualcomm PPE/NSS QoS。
-- WOL/Etherwake、Tailscale 原生 LuCI 管理及中文包、DDNS-Go 和中文管理界面。
+- WOL/Etherwake 默认安装；Tailscale 原生 LuCI 及中文包、DDNS-Go 及中文界面**仍在软件清单里，但默认以负号排除**。
 - 移除可能重复或不适合此设计的 HomeProxy、Diskman、Statistics 和 ip-tiny。
 
-统一软件清单：`configs/official-packages.txt`。默认快速构建使用配套官方 ImageBuilder APK；原完整源码构建后备也会引用同一清单。更改清单将触发重新打包。
+统一软件清单：`configs/official-packages.txt`。恢复可选软件时，将对应负号条目改为正向条目；恢复 OTA 另需修改工作流开关。默认快速构建使用配套官方 ImageBuilder APK；原完整源码构建后备也会引用同一清单。更改清单将触发重新打包。
 
 ## 已移植的通用配置
 
@@ -49,7 +49,7 @@
 
 1. CI 对完整包清单打包，定位不存在的 APK、依赖冲突与 FIT 体积。
 2. 为无匹配官方二进制的**确实必要**软件包补充同 ABI 官方 SDK 构建；没有缺包不下载 SDK。
-3. 实机验证 LuCI、Tailscale、WOL、Wi-Fi MAC、WireGuard、SQM、rootfs_data 和配置保留。
-4. WMA301 专属 OTA 的代码和人工发布工作流已实现，下一步必须做实机测试后才能开启稳定通道。不能用亚瑟的升级脚本直接写 WMA301 NAND。
+3. 实机验证 LuCI、WOL、Wi-Fi MAC、WireGuard、SQM、rootfs_data 和配置保留；Tailscale/DDNS-Go 暂不打包。
+4. WMA301 专属 OTA 的后端、LuCI 和单通道发布代码仍保留，当前默认不注入固件、不自动发布；后续需要时再启用并实机验收。不能用亚瑟的升级脚本直接写 WMA301 NAND。
 
 已验证的构建流程和失败回退详见 [BUILD-RUNBOOK.md](BUILD-RUNBOOK.md)。

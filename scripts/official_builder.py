@@ -17,6 +17,7 @@ from pathlib import Path
 
 from prepare import DEVICE, prepare
 from aurora import stage as stage_aurora
+from stage_files import stage_files
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "tplink_wma301-v2"
@@ -177,24 +178,8 @@ def compile_dtb(builder: Path, kdir: Path, linux: Path, headers: Path) -> Path:
 
 
 def stage_custom_files(overlay: Path) -> list[str]:
-    """Stage portable first-boot settings without changing vendor boot logic."""
-    root = ROOT / "files"
-    staged = []
-    if not root.is_dir():
-        return staged
-    for source in sorted(root.rglob("*")):
-        require(not source.is_symlink(), f"symlink prohibited in overlay: {source}")
-        if not source.is_file():
-            continue
-        rel = source.relative_to(root)
-        dest = overlay / rel
-        require(not dest.exists(), f"custom overlay clashes with board file: {rel}")
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, dest)
-        if rel.parts[:2] == ("etc", "uci-defaults"):
-            dest.chmod(dest.stat().st_mode | 0o111)
-        staged.append(rel.as_posix())
-    return staged
+    """Stage source-controlled files; optional OTA is off unless explicitly enabled."""
+    return stage_files(ROOT / "files", overlay)
 
 
 def stage(builder: Path, upstream: Path, overlay: Path, expected_source: str,

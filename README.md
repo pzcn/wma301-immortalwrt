@@ -12,7 +12,7 @@
 
 默认使用 [官方 Builder 快速工作流](.github/workflows/official-builder.yml) **每天检查**官方 SNAPSHOT：内核与 APK 直接复用，单独编译 WMA301 设备树。对官方 ImageBuilder、匹配 Linux 头文件使用按 SHA256 命名的 GitHub Actions 缓存；按官方二进制哈希、代码输入和周次判断是否需要重打包。
 
-官方软件包在 [configs/official-packages.txt](configs/official-packages.txt) 管理（包括 Bootstrap 回退主题）。**Aurora v1.4.0** 独立从固定版本源码获取：快速路径只复制已编译的主题文件，不下载 SDK；完整源码后备则编译标准 LuCI 主题 APK。快速路径只生成 sysupgrade FIT，通过离线校验后上传 **14 天验证 Artifact** 并自动发布唯一 OTA 固件源；设备不自动下载或刷机。官方配套 SDK 目前只记录来源，第三方 APK 补编留在后续计划。
+官方软件包在 [configs/official-packages.txt](configs/official-packages.txt) 管理（包括 Bootstrap 回退主题）。**Aurora v1.4.0** 独立从固定版本源码获取：快速路径只复制已编译的主题文件，不下载 SDK；完整源码后备则编译标准 LuCI 主题 APK。快速路径只生成 sysupgrade FIT，通过离线校验后上传 **14 天验证 Artifact**；**默认不发布 OTA 固件源**。OTA 代码仍保留在仓库中，按需再启用。官方配套 SDK 目前只记录来源，第三方 APK 补编留在后续计划。
 
 原 [完整源码构建后备](.github/workflows/firmware.yml) **改为手动运行**，保留最新 HEAD、双 FIT、离线验证与 pre-release 发布机制；不再每天或在 push 时重复完整编译。
 
@@ -20,7 +20,7 @@
 
 ## 亚瑟通用软件同步
 
-已将亚瑟的通用 LuCI 插件、简体中文、WireGuard、Tailscale、WOL、SQM、DDNS-Go 等移入 [固件软件包清单](configs/official-packages.txt)，并增加简体中文初始化。**按当前要求，WMA301 不含 sing-box 或其管理界面。** Qualcomm NSS/PPE、eMMC/F2FS、Dr.COM 均不复制；WMA301 OTA 已独立实现但待实机验证。
+已将亚瑟的通用 LuCI 插件、简体中文、WireGuard、WOL、SQM 等移入 [固件软件包清单](configs/official-packages.txt)，并增加简体中文初始化。**Tailscale（含 LuCI/中文包及专用 kmod-tun）、DDNS-Go（含 LuCI/中文包）默认以负号排除，配置项保留可恢复；sing-box 仍不安装。** Qualcomm NSS/PPE、eMMC/F2FS、Dr.COM 均不复制；WMA301 OTA 实现保留但默认屏蔽。
 
 完整取舍说明：[亚瑟软件同步清单](docs/ARTHUR-SOFTWARE.md)。
 
@@ -31,11 +31,11 @@
 
 实现细节与回退方法见 [docs/AURORA.md](docs/AURORA.md)。Aurora 不依赖 sing-box；固件仍明确不安装 sing-box 或 HomeProxy。
 
-## WMA301 专属 OTA
+## WMA301 专属 OTA（默认屏蔽）
 
-新增**独立 OTA 更新页面和唯一 OTA 固件源**：系统 → WMA301 在线更新。固件嵌入构建来源身份，设备可检查、下载、SHA256 校验专属 FIT；必须检查 `sysupgrade -T` 和 UBI 环境双卷，才能由管理员手动发起升级。**默认禁用实际刷写，绝不定时自动升级。**
+WMA301 OTA 后端、LuCI 页面、RPC ACL、配置、构建身份和单源发布代码**全部保留**，但当前两条构建流程均将 `WMA301_ENABLE_OTA` 设为 `'false'`。默认固件不会安装 OTA 页面或后端，不嵌入 OTA 身份，也不自动发布 `wma301-ota-r<RunID>` Release。普通 LuCI「备份/升级」和手动刷写 FIT 功能不受影响。
 
-每次官方 Builder 快速构建成功、验证 FIT 且上传 Artifact 后，自动发布不可覆盖的 `wma301-ota-r<RunID>` 固件版本；不再区分 testing/stable，也不需人工提升。GitHub Release 仅作为 OTA 文件托管，**并不代表已实机验证**。详见 [OTA 实施与安全操作手册](docs/OTA.md)。
+需要恢复时，将 `.github/workflows/official-builder.yml` 和 `.github/workflows/firmware.yml` 顶层 `WMA301_ENABLE_OTA` 均改为 `'true'` 后重新构建；不要仅启用 OTA 发布而不注入对应设备文件。详细实现留存于 [OTA 手册](docs/OTA.md)。
 
 ## 固件格式与分区
 
@@ -59,7 +59,7 @@ UBI 中使用 `fit`（本项目的 SquashFS FIT）、`ubootenv`、`ubootenv2`、
 - `configs/wma301.config`：系统选项。
 - `scripts/prepare.py`：在临时下载的官方树中添加 WMA301 定义、网络、FIT 升级识别；遇到官方原生定义或不匹配直接失败，不强行覆盖。
 - `scripts/verify.py`：在编译之后检查两个 FIT 镜像、签名/哈希和实际 DTS 分区协议。
-- `official-builder.yml`：每天检查官方二进制、复用缓存、重打包、校验后上传 Artifact 并自动发布唯一 OTA 固件源。
+- `official-builder.yml`：每天检查官方二进制、复用缓存、重打包、校验后上传 Artifact；OTA Release 发布默认关闭。
 - `firmware.yml`：手工运行的 HEAD 完整源码双 FIT 构建与预发布后备。
 
 **限制：** 当前仅做源码编译/结构与完整性检查，不能证明 Wi-Fi 校准、交换机链路、BL33 加载、overlay 掉电持久化和 Web 恢复均在硬件上通过。首次刷入前须从独立刷入仓库完成备份及实机验证。未经验证不应把预发布固件自动推送到设备上。

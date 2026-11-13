@@ -1,5 +1,9 @@
 name: WMA301 | Official ImageBuilder fast-path
 
+# The OTA implementation stays in the repository, but is omitted from default images.
+env:
+  WMA301_ENABLE_OTA: 'false' # Change to 'true' to restore OTA staging and publication.
+
 on:
   schedule:
     - cron: '41 2 * * *'
@@ -9,6 +13,8 @@ on:
     paths:
       - '.github/workflows/official-builder.yml'
       - 'scripts/official_builder.py'
+      - 'scripts/stage_files.py'
+      - 'scripts/test_stage_files.py'
       - 'scripts/prepare.py'
       - 'scripts/verify_official.py'
       - 'scripts/verify.py'
@@ -54,7 +60,7 @@ jobs:
       - name: Fingerprint official archive, local inputs and ISO week
         id: fingerprint
         env:
-          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'scripts/aurora.py', 'scripts/test_aurora.py', 'scripts/wma301_ota.py', 'scripts/test_wma301_ota.py', 'scripts/test_wma301_runtime.py', 'files/**', '.github/workflows/official-builder.yml') }}
+          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/stage_files.py', 'scripts/test_stage_files.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'scripts/aurora.py', 'scripts/test_aurora.py', 'scripts/wma301_ota.py', 'scripts/test_wma301_ota.py', 'scripts/test_wma301_runtime.py', 'files/**', '.github/workflows/official-builder.yml') }}
           IB_SHA: ${{ steps.resolve.outputs.ib_sha }}
         run: |
           set -euo pipefail
@@ -88,8 +94,9 @@ jobs:
       - name: Check Python, device geometry and safe package list
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/official_builder.py scripts/verify_official.py scripts/aurora.py
+          python3 -m py_compile scripts/official_builder.py scripts/stage_files.py scripts/verify_official.py scripts/aurora.py
           python3 scripts/test_official_builder.py
+          python3 scripts/test_stage_files.py
           python3 scripts/test_aurora.py
           python3 scripts/test_wma301_ota.py
           python3 scripts/test_wma301_runtime.py
@@ -247,6 +254,7 @@ jobs:
             --aurora-source "$PWD/aurora-theme"
           echo "BUILDER=$BUILDER" >> "$GITHUB_ENV"
       - name: Stamp this FIT's exact OTA identity
+        if: env.WMA301_ENABLE_OTA == 'true'
         run: |
           set -euo pipefail
           IB_SHA="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder_sha256"])')"
@@ -265,17 +273,22 @@ jobs:
       - name: Verify FIT geometry, hashes, metadata and package list
         run: |
           set -euo pipefail
+          OTA_ARGS=()
+          if [ "$WMA301_ENABLE_OTA" = "true" ]; then
+            OTA_ARGS=(--ota-stamp "$PWD/wma301-overlay/etc/wma301-ota-release")
+          fi
           python3 scripts/verify_official.py --images images --output dist \
             --provenance official-provenance.json --local-sha "$GITHUB_SHA" \
             --packages-file configs/official-packages.txt \
-            --aurora-overlay "$PWD/wma301-overlay" \
-            --ota-stamp "$PWD/wma301-overlay/etc/wma301-ota-release"
+            --aurora-overlay "$PWD/wma301-overlay" "${OTA_ARGS[@]}"
           (cd dist && sha256sum -c SHA256SUMS)
           test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 1
-          # Independently verify the OTA metadata for this real FIT.
-          python3 scripts/wma301_ota.py metadata --dist dist \
-            --build "$GITHUB_RUN_ID" --source-sha "$GITHUB_SHA" \
-            --output "$RUNNER_TEMP/wma301-ota-preview.json"
+          if [ "$WMA301_ENABLE_OTA" = "true" ]; then
+            # Independently verify the opt-in OTA metadata for this real FIT.
+            python3 scripts/wma301_ota.py metadata --dist dist \
+              --build "$GITHUB_RUN_ID" --source-sha "$GITHUB_SHA" \
+              --output "$RUNNER_TEMP/wma301-ota-preview.json"
+          fi
       - name: Upload verified FIT Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -286,6 +299,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Publish verified FIT to single OTA feed
+        if: env.WMA301_ENABLE_OTA == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -359,8 +373,8 @@ jobs:
             printf '| Builder archive cache hit | %s |\n' "$IB_CACHE"
             printf '| Linux source archive cache hit | %s |\n' "$KERNEL_CACHE"
             echo '| Aurora | v1.4.0 pinned source / prebuilt assets |'
-            printf '| OTA build ID | %s |\n' "$GITHUB_RUN_ID"
-            echo '| OTA feed | Single feed, published on successful fast build |'
+            printf '| WMA301 OTA enabled | %s |\n' "$WMA301_ENABLE_OTA"
+            echo '| OTA feed | Disabled by default; code retained |'
             echo '| Output | Verified sysupgrade FIT (no recovery) |'
             echo '| Hardware validation | Not tested — do not auto-flash |'
             printf '\n[Download verified Artifact](https://github.com/%s/actions/runs/%s)\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"

@@ -47,10 +47,11 @@ of silently compiling against an unrelated source.
 5. `verify_official.py` runs the same FIT hash, image contents and NAND/DTS
    checks as `verify.py`.
 
-The workflow uploads a 14-day verified Actions Artifact, then automatically
-publishes an immutable `wma301-ota-r<RunID>` Release in the **single WMA301 OTA
-feed**. No testing/stable selection or manual promotion. Publishing does not
-trigger a router upgrade. Device-side manual flashing remains disabled by default.
+The workflow uploads a 14-day verified Actions Artifact. The WMA301 OTA
+implementation is retained, but **disabled by default**: no OTA runtime files,
+release stamp, OTA metadata or `wma301-ota-r<RunID>` Release are produced.
+Set `WMA301_ENABLE_OTA: 'true'` in both workflows to opt back into OTA staging
+and release publication. This never auto-upgrades a router.
 
 It caches verified Builder/kernel source archives by SHA256 and skips duplicate
 scheduled builds with the same Builder + local inputs in the same ISO week.

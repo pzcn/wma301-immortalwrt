@@ -42,16 +42,19 @@ luci-i18n-sqm-zh-cn
 luci-app-bcp38
 luci-i18n-bcp38-zh-cn
 
-# Remote management, Wake-on-LAN and Dynamic DNS.
+# Remote management and Wake-on-LAN.
 luci-app-wol
 etherwake
 luci-i18n-wol-zh-cn
-tailscale
-luci-app-tailscale-community
-luci-i18n-tailscale-community-zh-cn
-kmod-tun
-luci-app-ddns-go
-luci-i18n-ddns-go-zh-cn
+
+# Optional services are disabled, not deleted. Remove the leading '-' to restore.
+# kmod-tun was included specifically for Tailscale and is disabled with it.
+-tailscale
+-luci-app-tailscale-community
+-luci-i18n-tailscale-community-zh-cn
+-kmod-tun
+-luci-app-ddns-go
+-luci-i18n-ddns-go-zh-cn
 
 # Exclude conflicting or redundant defaults.
 -ip-tiny

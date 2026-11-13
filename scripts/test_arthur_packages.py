@@ -12,11 +12,16 @@ required = {
     "luci-app-filemanager", "luci-app-ttyd", "luci-app-nlbwmon",
     "luci-app-wifihistory", "luci-app-irqbalance", "luci-app-lldpd",
     "luci-app-pbr", "luci-app-autoreboot", "luci-proto-wireguard",
-    "wireguard-tools", "luci-app-wol", "etherwake", "tailscale",
-    "luci-app-tailscale-community", "kmod-tun", "luci-app-ddns-go",
+    "wireguard-tools", "luci-app-wol", "etherwake",
 }
 assert required <= selected, sorted(required - selected)
 assert {"luci-app-homeproxy", "luci-app-diskman", "luci-app-statistics"} <= removed
+optional_disabled = {
+    "tailscale", "luci-app-tailscale-community",
+    "luci-i18n-tailscale-community-zh-cn", "kmod-tun",
+    "luci-app-ddns-go", "luci-i18n-ddns-go-zh-cn",
+}
+assert optional_disabled <= removed, sorted(optional_disabled - removed)
 assert not selected & removed
 for banned in ("sing-box", "luci-app-sing-box", "flock", "kmod-inet-diag"):
     assert banned not in selected, f"unexpected proxy component: {banned}"
@@ -26,4 +31,4 @@ assert script.is_file()
 assert script.stat().st_mode & 0o111, "LuCI preference script lacks executable mode"
 assert "luci-theme-aurora" not in selected, "Aurora is pinned source, not official APK"
 print(f"Arthur common software: {len(selected)} selected; "
-      f"{len(removed)} excluded; no sing-box; MT7981 checks PASS")
+      f"{len(removed)} excluded; Tailscale/DDNS-Go disabled; no sing-box; MT7981 checks PASS")

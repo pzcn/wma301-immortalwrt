@@ -192,7 +192,10 @@ def stage(builder: Path, upstream: Path, overlay: Path, expected_source: str,
         dst = overlay / relative
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(upstream / source, dst)
-        dst.chmod(0o755 if relative.startswith("etc/uci-defaults/") else 0o644)
+        # Preserve executable mode of the upstream board/hotplug helpers.
+        # UCI defaults must always be executable for first boot.
+        if relative.startswith("etc/uci-defaults/"):
+            dst.chmod(dst.stat().st_mode | 0o111)
 
     dts_dir = builder / "target/linux/mediatek/dts"
     require(dts_dir.is_dir(), "ImageBuilder lacks mediatek DTS directory")

@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 180
     env:
       BASE: https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/mediatek/filogic
-      GH_TOKEN: { github.token }
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - name: Install host tools and prepare disk
@@ -64,7 +64,7 @@ jobs:
           test "$(find builder-unpacked -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
       - name: Fetch exact matching ImmortalWrt integration source
         env:
-          SOURCE_SHA: { steps.source.outputs.sha }
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
         run: |
           set -euo pipefail
           git init -q upstream
@@ -90,8 +90,8 @@ jobs:
           echo "path=$PWD/kernel-source/linux-$VERSION/include" >> "$GITHUB_OUTPUT"
       - name: Inject local device profile and prebuilt kernel
         env:
-          SOURCE_SHA: { steps.source.outputs.sha }
-          HEADERS: { steps.headers.outputs.path }
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          HEADERS: ${{ steps.headers.outputs.path }}
         run: |
           set -euo pipefail
           BUILDER="$(find "$PWD/builder-unpacked" -mindepth 1 -maxdepth 1 -type d -print -quit)"

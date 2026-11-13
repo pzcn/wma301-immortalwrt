@@ -4,6 +4,13 @@
 
 **此次明确不安装 sing-box**（既不安装内核，也不移植 sing-box JSON LuCI、开机配置或相关依赖）。HomeProxy 同样不随固件预装。两个路由器硬件和用途不同，不能简单照搬整个文件树。
 
+## GitHub Actions 实测
+
+- **[快速构建 #43386109613](https://github.com/pzcn/wma301-immortalwrt/actions/runs/43386109613)：成功。** 使用官方 ImageBuilder 将当前 42 项预选软件包（另有 7 项排除规则）打包进 WMA301 sysupgrade FIT，通过 FIT/DTS/NAND 校验并上传实验 Artifact。
+- GitHub Actions Artifact ZIP 约 30.6 MB；这是下载包的大小，不等同于闪存写入占用，也不证明设备在 256 MiB RAM 上同时运行所有服务稳定。
+- 已检查仓库文件树和预装包列表，没有 sing-box 源码、Lua/LuCI 管理界面或正向选择的 sing-box 包。
+- **完整源码双 FIT 后备尚未重新完整编译实测**；其软件包同步和工作流 YAML 修复保留为后备。
+
 ## 已移植的官方软件包
 
 - LuCI + 简体中文、文件管理、ttyd 终端、nlbwmon、Wi-Fi 历史、IRQBalance、LLDP、PBR、定时重启。

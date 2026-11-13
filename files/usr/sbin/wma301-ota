@@ -17,17 +17,11 @@ digits() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
 hash_ok() { [ "${#1}" -eq 64 ] && ! printf '%s' "$1" | grep -q '[^a-f0-9]'; }
 tag_ok() {
     case "$1" in
-        wma301-ota-stable-r*|wma301-ota-testing-r*)
-            case "$1" in *[!a-z0-9-]*) return 1 ;; esac ;;
+        wma301-ota-r[1-9]*) digits "${1#wma301-ota-r}" ;;
         *) return 1 ;;
     esac
 }
 meta() { jq -r --arg key "$1" '.[$key] | if . == null then empty else . end' "$WORK/ota.json"; }
-configured_channel() {
-    CHANNEL="$(uci -q get wma301-ota.main.channel 2>/dev/null || true)"
-    [ -n "$CHANNEL" ] || CHANNEL=stable
-    case "$CHANNEL" in stable|testing) ;; *) die "Unknown OTA channel" ;; esac
-}
 identity() {
     [ -r "$RELEASE" ] || die "Missing build-time WMA301 OTA identity"
     . "$RELEASE"
@@ -49,32 +43,29 @@ fetch() {
 prepare_work() { umask 077; mkdir -p "$WORK" || die "Cannot create OTA work dir"; }
 lookup() {
     identity
-    configured_channel
     prepare_work
     fetch "$API" "$WORK/releases.json" || die "Cannot reach GitHub Releases"
-    prefix="wma301-ota-$CHANNEL-r"
-    case "$CHANNEL" in stable) pre=false ;; testing) pre=true ;; esac
-    LATEST="$(jq -er --arg prefix "$prefix" --arg image "$IMAGE" --argjson pre "$pre" '
-        [.[] | select(.draft == false and .prerelease == $pre and
-            (.tag_name | startswith($prefix)) and
+    LATEST="$(jq -er --arg image "$IMAGE" '
+        [.[] | select(.draft == false and .prerelease == false and
+            (.tag_name | test("^wma301-ota-r[1-9][0-9]*$")) and
             any(.assets[]?; .name == "ota.json") and
             any(.assets[]?; .name == $image))]
-        | sort_by(.published_at // "") | last | .tag_name // empty
+        | sort_by(.tag_name | ltrimstr("wma301-ota-r") | tonumber)
+        | last | .tag_name // empty
     ' "$WORK/releases.json" 2>/dev/null)" ||
-        die "No OTA Release on the selected channel"
+        die "No verified WMA301 OTA firmware published yet"
     tag_ok "$LATEST" || die "Untrusted OTA release tag"
     fetch "$ASSETS/$LATEST/ota.json" "$WORK/ota.json" ||
         die "Cannot download OTA metadata"
-    [ "$(meta schema)" = 2 ] &&
+    [ "$(meta schema)" = 3 ] &&
     [ "$(meta repository)" = "$REPO" ] &&
-    [ "$(meta channel)" = "wma301-$CHANNEL" ] &&
     [ "$(meta tag)" = "$LATEST" ] &&
     [ "$(meta board)" = "$BOARD" ] &&
     [ "$(meta profile)" = "$PROFILE" ] &&
     [ "$(meta layout)" = "$LAYOUT" ] &&
     [ "$(meta image)" = "$IMAGE" ] &&
     [ "$(meta auto_upgrade)" = false ] ||
-        die "OTA metadata does not match WMA301/channel"
+        die "OTA metadata does not match WMA301"
     LATEST_BUILD="$(meta build)"
     SIZE="$(meta image_size)"
     SHA256="$(meta image_sha256)"
@@ -82,7 +73,7 @@ lookup() {
         [ "$LATEST_BUILD" -gt 0 ] &&
         [ "$SIZE" -gt 1000000 ] && [ "$SIZE" -lt 100663296 ] ||
         die "Invalid OTA version, image size or checksum"
-    [ "$LATEST" = "wma301-ota-$CHANNEL-r$LATEST_BUILD" ] ||
+    [ "$LATEST" = "wma301-ota-r$LATEST_BUILD" ] ||
         die "OTA tag/build mismatch"
 }
 newer() { [ "$LATEST_BUILD" -gt "$OTA_BUILD" ]; }
@@ -123,25 +114,24 @@ status_ready() {
         downloaded=true
     fi
     if armed; then allowed=true; else allowed=false; fi
-    jq -nc --arg current "$OTA_BUILD" --arg channel "$CHANNEL" \
+    jq -nc --arg current "$OTA_BUILD" \
         --arg latest "$LATEST" --argjson latest_build "$LATEST_BUILD" \
         --argjson size "$SIZE" --argjson update "$has_update" \
         --argjson downloaded "$downloaded" --argjson allowed "$allowed" \
-        '{current:$current,channel:$channel,latest:$latest,
+        '{current:$current,latest:$latest,
           latest_build:$latest_build,size:$size,update:$update,
           downloaded:$downloaded,flash_enabled:$allowed,auto:false}'
 }
 status() {
-    configured_channel
     if [ -r "$RELEASE" ]; then . "$RELEASE"; fi
     current="${OTA_BUILD:-0}"
     if answer="$("$0" _status_ready 2>"$WORK/status-error")"; then
         printf '%s\n' "$answer"
     else
         reason="$(cat "$WORK/status-error" 2>/dev/null)"
-        jq -nc --arg current "$current" --arg channel "$CHANNEL" \
+        jq -nc --arg current "$current" \
             --arg error "$reason" \
-            '{current:$current,channel:$channel,update:false,
+            '{current:$current,update:false,
               downloaded:false,flash_enabled:false,auto:false,error:$error}'
     fi
 }

@@ -22,7 +22,6 @@ return view.extend({
 		this._otaStatus = status || {};
 		const state = this._otaStatus, rows = [
 			simpleRow('设备专属渠道', 'WMA301 v2.0 / 单 UBI'),
-			simpleRow('更新通道', state.channel || 'stable'),
 			simpleRow('当前构建编号', String(state.current || '—')),
 			simpleRow('最新发布', state.latest || '暂未发布'),
 			simpleRow('升级模式', '仅人工操作，自动升级始终关闭')
@@ -135,7 +134,7 @@ return view.extend({
 		const root = E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, 'WMA301 专属 OTA'),
 			E('div', { 'class': 'cbi-section' }, [
-				E('p', {}, '独立于原生固件刷写页面，仅接受本设备专属发布渠道、经过哈希验证的 FIT。默认禁止实际刷写。'),
+				E('p', {}, '独立于原生固件刷写页面，仅接受本设备唯一 OTA 固件源的已校验 FIT。默认禁止实际刷写。'),
 				this._otaInfo,
 				E('div', { 'class': 'cbi-page-actions' }, [
 					this._refresh, ' ', this._download, ' ', this._install
@@ -145,7 +144,7 @@ return view.extend({
 				E('h3', {}, '安全策略'),
 				E('p', {}, '常规检查与下载无需启用刷写。实机完成 UBI 环境卷、保留配置和恢复验证后，管理员才能手动启用安装：'),
 				E('pre', {}, "uci set wma301-ota.main.enable_flash='1'\nuci commit wma301-ota"),
-				E('p', {}, '实验固件须由人工发布到 testing 通道。默认只检查 stable 通道，不提供自动更新服务。')
+				E('p', {}, '只有一个 OTA 固件源：快速构建通过后自动发布。设备不会自动下载或安装更新。')
 			])
 		]);
 		this.showStatus(data);

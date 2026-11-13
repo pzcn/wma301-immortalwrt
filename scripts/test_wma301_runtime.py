@@ -28,12 +28,22 @@ with TemporaryDirectory() as tmp:
     payload.write_bytes(b"FAKE-OTA-FIT" * 110_000)
     digest = hashlib.sha256(payload.read_bytes()).hexdigest()
     run = 12345
-    tag = f"wma301-ota-stable-r{run}"
-    index = [{"tag_name": tag, "draft": False, "prerelease": False,
-              "published_at": "2026-11-13T08:00:00Z",
-              "assets": [{"name": "ota.json"}, {"name": IMAGE}]}]
+    tag = f"wma301-ota-r{run}"
+    index = [
+        {"tag_name": tag, "draft": False, "prerelease": False,
+         "published_at": "2026-11-13T08:00:00Z",
+         "assets": [{"name": "ota.json"}, {"name": IMAGE}]},
+        # Publication time is not the firmware version; prefer larger run ID.
+        {"tag_name": "wma301-ota-r12343", "draft": False, "prerelease": False,
+         "published_at": "2026-11-13T09:00:00Z",
+         "assets": [{"name": "ota.json"}, {"name": IMAGE}]},
+        {"tag_name": "wma301-ota-r12346", "draft": True, "prerelease": False,
+         "assets": [{"name": "ota.json"}, {"name": IMAGE}]},
+        {"tag_name": "wma301-ota-testing-r99999", "draft": False,
+         "prerelease": False, "assets": [{"name": "ota.json"}, {"name": IMAGE}]},
+    ]
     (root / "fixtures/releases.json").write_text(json.dumps(index))
-    remote = {"schema": 2, "repository": REPO, "channel": "wma301-stable",
+    remote = {"schema": 3, "repository": REPO,
               "tag": tag, "build": run, "board": BOARD, "profile": PROFILE,
               "layout": LAYOUT, "image": IMAGE, "image_sha256": digest,
               "image_size": payload.stat().st_size, "auto_upgrade": False}
@@ -61,7 +71,6 @@ cp "$src" "$dest"
     fakeuci = root / "bin/uci"
     fakeuci.write_text("""#!/bin/sh
 case "$*" in
-  *wma301-ota.main.channel*) echo stable ;;
   *wma301-ota.main.enable_flash*) echo 0 ;;
   *) exit 1 ;;
 esac
@@ -91,7 +100,7 @@ exit 0
     status = json.loads(result.stdout)
     assert status["update"] is True and status["downloaded"] is False, status
     assert status["flash_enabled"] is False and status["auto"] is False, status
-    assert status["latest"] == tag
+    assert status["latest"] == tag and "channel" not in status
     result = call("download")
     assert result.returncode == 0, result.stderr
     assert "-T " in (root / "upgrade.log").read_text()
@@ -99,12 +108,17 @@ exit 0
     assert json.loads(result.stdout)["downloaded"] is True, result.stdout
     result = call("start")
     assert result.returncode != 0 and "not enabled" in result.stderr
-    # If GitHub metadata is for another board or channel it is rejected.
+    # If GitHub metadata is for another board or release tag it is rejected.
     remote["board"] = "jdcloud,re-ss-01"
     (root / "fixtures/ota.json").write_text(json.dumps(remote))
     result = call("status")
     assert json.loads(result.stdout)["update"] is False
     assert "does not match" in json.loads(result.stdout)["error"]
+    remote["board"] = BOARD
+    remote["tag"] = "wma301-ota-r99999"
+    (root / "fixtures/ota.json").write_text(json.dumps(remote))
+    result = call("status")
+    assert "does not match" in json.loads(result.stdout)["error"]
     # No real /sbin/sysupgrade ever ran (stub accepts -T only).
     assert "UNSAFE" not in (root / "upgrade.log").read_text()
-print("WMA301 OTA mocked release, SHA256, download, device guard, no auto-flash: PASS")
+print("WMA301 OTA mocked single feed, SHA256, download, device guard, no auto-flash: PASS")

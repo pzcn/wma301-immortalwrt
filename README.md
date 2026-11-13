@@ -20,7 +20,7 @@
 
 ## 亚瑟通用软件同步
 
-已将亚瑟的通用 LuCI 插件、简体中文、WireGuard、Tailscale、WOL、SQM、DDNS-Go 等移入 [固件软件包清单](configs/official-packages.txt)，并增加简体中文初始化。**按当前要求，WMA301 不含 sing-box 或其管理界面。** Qualcomm NSS/PPE、eMMC/F2FS、Dr.COM 和未实机验证的自定义 OTA 均不复制。
+已将亚瑟的通用 LuCI 插件、简体中文、WireGuard、Tailscale、WOL、SQM、DDNS-Go 等移入 [固件软件包清单](configs/official-packages.txt)，并增加简体中文初始化。**按当前要求，WMA301 不含 sing-box 或其管理界面。** Qualcomm NSS/PPE、eMMC/F2FS、Dr.COM 均不复制；WMA301 OTA 已独立实现但待实机验证。
 
 完整取舍说明：[亚瑟软件同步清单](docs/ARTHUR-SOFTWARE.md)。
 
@@ -30,6 +30,12 @@
 默认使用与亚瑟相同的 [Aurora v1.4.0](https://github.com/eamonxg/luci-theme-aurora/tree/v1.4.0)，源码提交锁定为 `84c27b66952e6fc4be60128067a6b88bfd34afb5`；**不会锁定 ImmortalWrt 上游版本**。首次启动自动注册并默认选中 Aurora，保留官方 Bootstrap 供故障回退，且不覆盖已保存的其他主题选择。
 
 实现细节与回退方法见 [docs/AURORA.md](docs/AURORA.md)。Aurora 不依赖 sing-box；固件仍明确不安装 sing-box 或 HomeProxy。
+
+## WMA301 专属 OTA
+
+新增**独立 OTA 更新页面和双通道 Release**：系统 → WMA301 在线更新。固件嵌入构建来源身份，设备可检查、下载、SHA256 校验专属 FIT；必须检查 `sysupgrade -T` 和 UBI 环境双卷，才能由管理员手动发起升级。**默认禁用实际刷写，绝不定时自动升级。**
+
+快速构建仍只生成实验 Artifact；独立 [ota-promote.yml](.github/workflows/ota-promote.yml) 允许将人工选定、重复校验过的成功运行提升为 testing/stable OTA Release，stable 需明确确认硬件升级验证。详见 [OTA 实施与安全操作手册](docs/OTA.md)。
 
 ## 固件格式与分区
 

@@ -74,6 +74,10 @@ jobs:
           python3 scripts/test_layout.py
           python3 scripts/test_arthur_packages.py
           python3 scripts/test_aurora.py
+          python3 scripts/test_wma301_ota.py
+          python3 scripts/test_wma301_runtime.py
+          sh -n files/usr/sbin/wma301-ota
+          node --check files/www/luci-static/resources/view/system/wma301-ota.js
           sh -n files/etc/uci-defaults/95-luci-preferences
           python3 scripts/test_sync_package_config.py
       - name: Clone current upstream (no permanent SHA lock)
@@ -103,6 +107,7 @@ jobs:
           python3 scripts/sync_package_config.py apply --packages configs/official-packages.txt --config upstream/.config
           mkdir -p upstream/files
           cp -a files/. upstream/files/
+          python3 scripts/wma301_ota.py stamp --overlay upstream/files             --build "$GITHUB_RUN_ID" --source-sha "$GITHUB_SHA"
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq

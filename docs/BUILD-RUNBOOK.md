@@ -72,6 +72,10 @@
 
 通用插件与中文包已整理到 `configs/official-packages.txt`；Aurora v1.4.0 额外使用 [AURORA.md](AURORA.md) 所述固定源码与双路径安装；默认快速路径与完整源码路径应使用同一清单。WMA301 版本明确**不含 sing-box**，也不移植 Qualcomm NSS/PPE 和 eMMC/F2FS 代码。各项取舍参阅 [ARTHUR-SOFTWARE.md](ARTHUR-SOFTWARE.md)。
 
+## WMA301 独立 OTA
+
+已加入 [OTA.md](OTA.md) 所述的 WMA301 专属更新后端、LuCI 页面及单独的人工 Release 提升流程。快速构建内嵌 GitHub Run ID 和 Builder 哈希，自动日检和实验 Artifact 仍保留；**任何成功构建均不会自动进入 OTA Release 或自动刷写**。首次实机升级、配置持久化及环境卷验收是开放 stable 前的强制步骤。
+
 ## 五、后续研发任务与验收标准
 
 | 优先级 | 状态 | 任务 | 验收 |
@@ -81,7 +85,7 @@
 | P2 | ⬜ 待实施 | 用**匹配官方 Builder 的 SDK**只补编官方没有的第三方 APK | 不修改内核 ABI，不跨源安装；无缺包不下载 SDK |
 | P3 | ⬜ 待研究 | 减少 recovery 的完整源码构建需求 | 如果不能安全复用 initramfs 生成，继续保留完整后备 |
 | P4 | ⬜ 待实机验收 | 启动、LAN/WAN、Wi-Fi 校准、MAC、四 UBI 卷、升级保留配置、SPI-NAND ECC、冷启动及恢复 | 多轮实机升级/断电、存储和环境卷保持一致 |
-| P5 | ⬜ 禁止提前开启 | 正式发布/自动 OTA | 必须先通过 P4，再设计失败回滚与人工审批 |
+| P5 | 🧪 WMA301 专属 OTA 代码已实现，实机未验证 | 独立发布渠道、升级前校验、人工授权；禁止自动升级 | P4 验证后人工发布 stable，绝不自动刷写 |
 
 ## 六、维护原则
 

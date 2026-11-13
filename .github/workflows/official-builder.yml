@@ -21,6 +21,9 @@ on:
       - 'scripts/test_arthur_packages.py'
       - 'scripts/aurora.py'
       - 'scripts/test_aurora.py'
+      - 'scripts/wma301_ota.py'
+      - 'scripts/test_wma301_ota.py'
+      - 'scripts/test_wma301_runtime.py'
 permissions:
   contents: read
 concurrency:
@@ -51,7 +54,7 @@ jobs:
       - name: Fingerprint official archive, local inputs and ISO week
         id: fingerprint
         env:
-          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'scripts/aurora.py', 'scripts/test_aurora.py', 'files/**', '.github/workflows/official-builder.yml') }}
+          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'scripts/aurora.py', 'scripts/test_aurora.py', 'scripts/wma301_ota.py', 'scripts/test_wma301_ota.py', 'scripts/test_wma301_runtime.py', 'files/**', '.github/workflows/official-builder.yml') }}
           IB_SHA: ${{ steps.resolve.outputs.ib_sha }}
         run: |
           set -euo pipefail
@@ -88,6 +91,12 @@ jobs:
           python3 -m py_compile scripts/official_builder.py scripts/verify_official.py scripts/aurora.py
           python3 scripts/test_official_builder.py
           python3 scripts/test_aurora.py
+          python3 scripts/test_wma301_ota.py
+          python3 scripts/test_wma301_runtime.py
+          sh -n files/usr/sbin/wma301-ota
+          node --check files/www/luci-static/resources/view/system/wma301-ota.js
+          python3 -m json.tool files/usr/share/luci/menu.d/luci-app-wma301-ota.json >/dev/null
+          python3 -m json.tool files/usr/share/rpcd/acl.d/luci-app-wma301-ota.json >/dev/null
           sh -n files/etc/uci-defaults/95-luci-preferences
           python3 scripts/test_layout.py
           python3 scripts/test_arthur_packages.py
@@ -237,6 +246,11 @@ jobs:
             --expected-source "$SOURCE_SHA" --kernel-headers "$HEADERS" \
             --aurora-source "$PWD/aurora-theme"
           echo "BUILDER=$BUILDER" >> "$GITHUB_ENV"
+      - name: Stamp this FIT's exact OTA identity (no publication)
+        run: |
+          set -euo pipefail
+          IB_SHA="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder_sha256"])')"
+          python3 scripts/wma301_ota.py stamp             --overlay "$PWD/wma301-overlay" --build "$GITHUB_RUN_ID"             --source-sha "$GITHUB_SHA" --builder-sha256 "$IB_SHA"
       - name: Repack FIT using official precompiled Linux kernel
         run: |
           set -euo pipefail
@@ -254,7 +268,8 @@ jobs:
           python3 scripts/verify_official.py --images images --output dist \
             --provenance official-provenance.json --local-sha "$GITHUB_SHA" \
             --packages-file configs/official-packages.txt \
-            --aurora-overlay "$PWD/wma301-overlay"
+            --aurora-overlay "$PWD/wma301-overlay" \
+            --ota-stamp "$PWD/wma301-overlay/etc/wma301-ota-release"
           (cd dist && sha256sum -c SHA256SUMS)
           test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 1
       - name: Upload experimental verified FIT (NO Release)
@@ -282,6 +297,8 @@ jobs:
             printf '| Builder archive cache hit | %s |\n' "$IB_CACHE"
             printf '| Linux source archive cache hit | %s |\n' "$KERNEL_CACHE"
             echo '| Aurora | v1.4.0 pinned source / prebuilt assets |'
+            printf '| OTA build ID | %s |\n' "$GITHUB_RUN_ID"
+            echo '| OTA release | Not published; manual promotion only |'
             echo '| Output | Experimental sysupgrade FIT (no recovery) |'
             echo '| Hardware validation | Not tested — do not auto-flash |'
             printf '\n[Download verified Artifact](https://github.com/%s/actions/runs/%s)\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"

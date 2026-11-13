@@ -1,0 +1,3 @@
+config ota 'main'
+	option channel 'stable'
+	option enable_flash '0'

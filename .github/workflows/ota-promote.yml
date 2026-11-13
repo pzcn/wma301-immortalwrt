@@ -1,0 +1,134 @@
+name: WMA301 | Promote verified FIT to dedicated OTA Release
+
+# Manual quality gate: never published by a successful quick build alone.
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful official-builder.yml run ID (within artifact retention)
+        type: string
+        required: true
+      channel:
+        description: testing=pre-release; stable=public release after hardware validation
+        type: choice
+        required: true
+        default: testing
+        options: [testing, stable]
+      hardware_confirmation:
+        description: For stable only, type WMA301_UBI_SYSUPGRADE_HARDWARE_VERIFIED
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: wma301-ota-promotion
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.source_run_id }}
+      CHANNEL: ${{ inputs.channel }}
+      CONFIRM: ${{ inputs.hardware_confirmation }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require explicit operator promotion and verify build origin
+        id: source
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = pzcn/wma301-immortalwrt
+          [[ "$SOURCE_RUN" =~ ^[0-9]{8,20}$ ]]
+          case "$CHANNEL" in
+            testing) ;;
+            stable)
+              test "$CONFIRM" = WMA301_UBI_SYSUPGRADE_HARDWARE_VERIFIED || {
+                echo "::error::Stable OTA requires explicit physical-device validation."
+                exit 1
+              }
+              ;;
+            *) exit 1 ;;
+          esac
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > ota-source-run.json
+          jq -e --arg repo "$GITHUB_REPOSITORY" '
+            .conclusion == "success" and .head_branch == "main" and
+            .head_repository.full_name == $repo and
+            .path == ".github/workflows/official-builder.yml" and
+            .name == "WMA301 | Official ImageBuilder fast-path (experimental)"
+          ' ota-source-run.json >/dev/null || {
+            echo "::error::Run was not a successful WMA301 official ImageBuilder build."
+            exit 1
+          }
+          SHA="$(jq -r .head_sha ota-source-run.json)"
+          [[ "$SHA" =~ ^[a-f0-9]{40}$ ]]
+          echo "source_sha=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Download immutable successful build Artifact
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN" -R "$GITHUB_REPOSITORY" \
+            -n WMA301_OFFICIAL_BUILDER_EXPERIMENT -D ota-input
+          test -s ota-input/dist/manifest.json
+          test -s ota-input/dist/SHA256SUMS
+          test -s ota-input/official-provenance.json
+      - name: Independently revalidate FIT, provenance and checksums
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          IMAGE=immortalwrt-mediatek-filogic-tplink_wma301-v2-squashfs-sysupgrade.itb
+          (cd ota-input/dist && sha256sum -c SHA256SUMS)
+          PYTHONPATH=scripts python3 -c \
+            'import sys; from pathlib import Path; from verify import verify_one; verify_one(Path(sys.argv[1]), True)' \
+            "ota-input/dist/$IMAGE"
+          mkdir -p ota-release
+          python3 scripts/wma301_ota.py metadata --dist ota-input/dist \
+            --build "$SOURCE_RUN" --source-sha "$SOURCE_SHA" \
+            --channel "$CHANNEL" --output ota-release/ota.json
+          # The build metadata's official artifact must match its copied copy.
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          artifact = json.loads(Path('ota-input/official-provenance.json').read_text())
+          manifest = json.loads(Path('ota-input/dist/manifest.json').read_text())
+          assert artifact == manifest['builder'], "Builder provenance mismatch"
+          assert manifest['ota']['builder_sha256'] == artifact['imagebuilder_sha256']
+          PY
+      - name: Publish separate immutable OTA channel, never clobber assets
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          TAG="wma301-ota-$CHANNEL-r$SOURCE_RUN"
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::OTA release already exists. Never overwrite OTA assets."
+            exit 1
+          fi
+          {
+            echo "# WMA301-only OTA: $CHANNEL"
+            echo
+            echo "Verified source workflow: https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN"
+            echo "Firmware integration commit: $SOURCE_SHA"
+            echo "Target: WMA301 v2.0, 121 MiB single UBI, OEM BL2/BL31 + custom BL33."
+            echo "Image: sysupgrade FIT only; no bootloader and no full NAND image."
+            echo
+            echo "Manual device upgrade remains disabled by default. Do not deploy to OEM A/B layout."
+          } > ota-release/NOTES.md
+          if [ "$CHANNEL" = testing ]; then
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
+              --target "$SOURCE_SHA" --title "WMA301 OTA testing — run $SOURCE_RUN" \
+              --notes-file ota-release/NOTES.md --latest=false --prerelease \
+              ota-input/dist/*.itb ota-input/dist/SHA256SUMS \
+              ota-input/dist/manifest.json ota-release/ota.json
+          else
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
+              --target "$SOURCE_SHA" --title "WMA301 OTA stable — run $SOURCE_RUN" \
+              --notes-file ota-release/NOTES.md --latest=false \
+              ota-input/dist/*.itb ota-input/dist/SHA256SUMS \
+              ota-input/dist/manifest.json ota-release/ota.json
+          fi
+          echo "Published immutable OTA channel asset: $TAG" >> "$GITHUB_STEP_SUMMARY"

@@ -35,6 +35,7 @@ conntrack
 kmod-nf-conntrack-netlink
 curl
 jsonfilter
+jq
 luci-app-sqm
 sqm-scripts
 luci-i18n-sqm-zh-cn

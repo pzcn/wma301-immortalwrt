@@ -42,7 +42,7 @@
 | QCA NSS / PPE 驱动、QoS、遥测页面 | Qualcomm IPQ60xx 特有；WMA301 是 MediaTek MT7981 |
 | eMMC / F2FS / extroot 补丁 | WMA301 为单 UBI + UBIFS overlay，不需要亚瑟 eMMC 修复 |
 | Dr.COM 校园网认证 | 亚瑟当前也没有默认装进固件，WMA301 不移植 |
-| 自定义 OTA / 覆盖官方 flash.js | WMA301 还未完成实机升级与 UBI 环境卷验证；必须独立实现且不能直接套用亚瑟 eMMC 升级逻辑 |
+| 亚瑟的 eMMC OTA 和 flash.js 覆盖代码 | 不直接复制；已单独实现 [WMA301 OTA](OTA.md)，使用专属 FIT/UBI 校验和独立发布渠道 |
 | CPU 频率调节、autocore/default-settings-chn | 与 SoC、设备预置项关联；先不在 WMA301 强行启用 |
 
 ## 后续计划
@@ -50,6 +50,6 @@
 1. CI 对完整包清单打包，定位不存在的 APK、依赖冲突与 FIT 体积。
 2. 为无匹配官方二进制的**确实必要**软件包补充同 ABI 官方 SDK 构建；没有缺包不下载 SDK。
 3. 实机验证 LuCI、Tailscale、WOL、Wi-Fi MAC、WireGuard、SQM、rootfs_data 和配置保留。
-4. 实机通过后再考虑单独适配 WMA301 OTA。不能用亚瑟的升级脚本直接写 WMA301 NAND。
+4. WMA301 专属 OTA 的代码和人工发布工作流已实现，下一步必须做实机测试后才能开启稳定通道。不能用亚瑟的升级脚本直接写 WMA301 NAND。
 
 已验证的构建流程和失败回退详见 [BUILD-RUNBOOK.md](BUILD-RUNBOOK.md)。

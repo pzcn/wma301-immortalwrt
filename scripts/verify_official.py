@@ -14,6 +14,7 @@ from pathlib import Path
 
 from verify import verify_one
 from official_builder import read_packages
+from wma301_ota import BOARD, LAYOUT, PROFILE, REPO, SHA256
 from aurora import THEME_METADATA, VERSION
 
 NAME_RE = re.compile(r".*tplink_wma301-v2-squashfs-sysupgrade\.itb$")
@@ -21,7 +22,8 @@ NAME_RE = re.compile(r".*tplink_wma301-v2-squashfs-sysupgrade\.itb$")
 
 def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str,
                 packages_file: Path | None = None,
-                aurora_overlay: Path | None = None) -> dict:
+                aurora_overlay: Path | None = None,
+                ota_stamp: Path | None = None) -> dict:
     candidates = sorted(p for p in images.iterdir()
                         if p.is_file() and NAME_RE.fullmatch(p.name))
     if len(candidates) != 1:
@@ -64,6 +66,36 @@ def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str,
     }
     if aurora_overlay is not None:
         manifest["bundled_theme"] = THEME_METADATA
+    if ota_stamp is not None:
+        # Parse data-only shell assignments. Never execute a downloaded stamp.
+        values = {}
+        for line in ota_stamp.read_text().splitlines():
+            if not line.startswith("OTA_"):
+                continue
+            key, sep, value = line.partition("=")
+            if not sep or not re.fullmatch(r"[a-zA-Z0-9,._/-]+", value):
+                raise ValueError("unsafe OTA identity assignment")
+            if key in values:
+                raise ValueError("duplicate OTA identity field")
+            values[key] = value
+        if (values.get("OTA_SCHEMA") != "2" or
+            values.get("OTA_REPOSITORY") != REPO or
+            values.get("OTA_BOARD") != BOARD or
+            values.get("OTA_PROFILE") != PROFILE or
+            values.get("OTA_LAYOUT") != LAYOUT or
+            values.get("OTA_SOURCE_SHA") != local_sha or
+            values.get("OTA_BUILDER_SHA256") != source.get("imagebuilder_sha256") or
+            SHA256.fullmatch(values.get("OTA_BUILDER_SHA256", "")) is None or
+            not values.get("OTA_BUILD", "").isdigit() or
+            int(values["OTA_BUILD"]) < 1):
+            raise ValueError("WMA301 OTA stamp mismatches source/Builder/device")
+        manifest["ota"] = {
+            "schema": 2, "repository": REPO, "board": BOARD,
+            "profile": PROFILE, "layout": LAYOUT,
+            "source_sha": local_sha,
+            "builder_sha256": values["OTA_BUILDER_SHA256"],
+            "build": int(values["OTA_BUILD"]),
+        }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (output / "SHA256SUMS").write_text(
         f"{hashlib.sha256(target.read_bytes()).hexdigest()}  {target.name}\n"
@@ -79,7 +111,8 @@ if __name__ == "__main__":
     p.add_argument("--local-sha", required=True)
     p.add_argument("--packages-file", type=Path)
     p.add_argument("--aurora-overlay", type=Path)
+    p.add_argument("--ota-stamp", type=Path)
     args = p.parse_args()
     print(json.dumps(verify_fast(args.images, args.output, args.provenance,
                                 args.local_sha, args.packages_file,
-                                args.aurora_overlay), indent=2))
+                                args.aurora_overlay, args.ota_stamp), indent=2))

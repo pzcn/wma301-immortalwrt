@@ -34,6 +34,8 @@
 
 **未完成实机验证时，只允许 testing prerelease，不应创建 stable OTA Release。**
 
+目前尚未实际执行过人工提升发布工作流：**Actions 成功不代表 GitHub 已经存在可供设备检查的 OTA Release**。需在真实硬件准备测试时手动选择这次成功的 Run ID 进行 testing 发布。
+
 ## 3. 路由器上检查和下载
 
 安装包含本功能的固件后，打开 LuCI「系统 → WMA301 在线更新」即可检查，或 SSH：
@@ -82,7 +84,8 @@ uci commit wma301-ota
 
 - [x] WMA301 独立发布渠道、版本身份、元数据生成和人工发布工作流
 - [x] LuCI 检查/下载/人工确认入口，后端哈希、设备/UBI 保护
-- [ ] GitHub Actions 全绿，验证 FIT 产物含 OTA 构建身份（CI 只检查打包源和元数据）
+- [x] **[Actions #43392160741](https://github.com/pzcn/wma301-immortalwrt/actions/runs/43392160741) 全绿**：WMA301 FIT 哈希/DTS/NAND 校验通过，OTA 内嵌构建身份与官方 Builder 来源核对通过，使用真实版本化 FIT 生成候选 `wma301-ota-testing-r43392160741` 元数据通过
+- [ ] 从 GitHub Actions 手动试运行 `ota-promote.yml` 的 testing 提升，确认长期 Release 附件和路由器端远程检查可用
 - [ ] 在实际 WMA301 v2.0 上验证 `/proc/mtd`、四个 UBI 卷、下载校验及启动
 - [ ] 经实机测试完成至少多轮 `sysupgrade`、重启、保留配置和恢复验证
 - [ ] 经上述验证后，再人工提升为 stable 发布

@@ -91,8 +91,12 @@ jobs:
           curl -fL --retry 3 --retry-delay 3 -o kernel-source/kernel.tar.xz \
             "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$VERSION.tar.xz"
           printf '%s  %s\n' "$EXPECTED" kernel-source/kernel.tar.xz | sha256sum -c -
+          # The upstream dt-bindings/input/linux-event-codes.h is a symlink
+          # into include/uapi, so extracting dt-bindings alone is incomplete.
           tar -xJf kernel-source/kernel.tar.xz -C kernel-source \
-            "linux-$VERSION/include/dt-bindings"
+            "linux-$VERSION/include/dt-bindings" \
+            "linux-$VERSION/include/uapi/linux/input-event-codes.h"
+          test -f "kernel-source/linux-$VERSION/include/dt-bindings/input/linux-event-codes.h"
           echo "path=$PWD/kernel-source/linux-$VERSION/include" >> "$GITHUB_OUTPUT"
       - name: Inject local device profile and prebuilt kernel
         env:

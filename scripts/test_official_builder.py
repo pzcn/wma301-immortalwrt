@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -77,7 +78,7 @@ def run() -> None:
         linux = kdir / "linux-6.12.116"
         (linux / "arch/arm64/boot/dts/mediatek").mkdir(parents=True)
         (linux / "arch/arm64/boot/dts/mediatek/mt7981b.dtsi").touch()
-        (kdir / "Image").write_bytes(b"TEST-KERNEL" * 10_000)
+        (kdir / "Image").write_bytes(os.urandom(220_000))
         found, source = locate_kernel(builder)
         assert found == kdir and source == linux
         gzip = prepare_kernel_image(kdir)

@@ -18,6 +18,12 @@
 
 **维护入口：[完整构建计划、流程、故障处理和后续任务](docs/BUILD-RUNBOOK.md)**。另见 [官方 Builder 技术说明](docs/OFFICIAL-IMAGEBUILDER.md)。
 
+## 亚瑟通用软件同步
+
+已将亚瑟的通用 LuCI 插件、简体中文、WireGuard、Tailscale、WOL、SQM、DDNS-Go 等移入 [固件软件包清单](configs/official-packages.txt)，并增加简体中文初始化。**按当前要求，WMA301 不含 sing-box 或其管理界面。** Qualcomm NSS/PPE、eMMC/F2FS、Dr.COM 和未实机验证的自定义 OTA 均不复制。
+
+完整取舍说明：[亚瑟软件同步清单](docs/ARTHUR-SOFTWARE.md)。
+
 ## 固件格式与分区
 
 **只针对已完成刷入迁移、采用当前单 UBI 布局的 WMA301 v2.0。**

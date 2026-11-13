@@ -1,0 +1,8 @@
+#!/bin/sh
+# Portable Arthur-derived preference, intentionally without theme or OTA.
+# Do not change credentials, Wi-Fi defaults or bootloader configuration.
+if [ -f /etc/config/luci ]; then
+    uci -q set luci.main.lang='zh_cn'
+    uci -q commit luci
+fi
+exit 0

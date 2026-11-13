@@ -68,6 +68,10 @@
 - **设备树/升级脚本不兼容：** 保留失败状态；对照上游源修适配，或手动执行完整源码构建，绝不略过 `verify_official.py`。
 - **部署前检查：** 只适用于已迁移为当前单 UBI 四卷布局的 WMA301 v2.0；绝不能将该 FIT 当原厂 A/B 全片镜像或 ubiformat 输入。
 
+## 亚瑟软件同步（WMA301 独立适配）
+
+通用插件与中文包已整理到 `configs/official-packages.txt`；默认快速路径与完整源码路径应使用同一清单。WMA301 版本明确**不含 sing-box**，也不移植 Qualcomm NSS/PPE 和 eMMC/F2FS 代码。各项取舍参阅 [ARTHUR-SOFTWARE.md](ARTHUR-SOFTWARE.md)。
+
 ## 五、后续研发任务与验收标准
 
 | 优先级 | 状态 | 任务 | 验收 |

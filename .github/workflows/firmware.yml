@@ -72,6 +72,8 @@ jobs:
         run: |
           python3 -m py_compile scripts/prepare.py scripts/verify.py scripts/fit_inspect.py
           python3 scripts/test_layout.py
+          python3 scripts/test_arthur_packages.py
+          python3 scripts/test_sync_package_config.py
       - name: Clone current upstream (no permanent SHA lock)
         run: |
           set -euo pipefail
@@ -87,6 +89,7 @@ jobs:
           set -euo pipefail
           python3 scripts/prepare.py --upstream upstream
           cp configs/wma301.config upstream/.config
+          python3 scripts/sync_package_config.py apply --packages configs/official-packages.txt --config upstream/.config
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
@@ -107,7 +110,64 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           make defconfig
-          grep -q '^CONFIG_TARGET_mediatek_filogic=y$' .config
+          python3 ../scripts/sync_package_config.py check --packages ../configs/official-packages.txt --config .config
+          grep -q '^CONFIG_TARGET_mediatek_filogic=y
+          grep -E '^CONFIG_TARGET_.*wma301-v2=y$' .config
+      - name: Download source archives
+        working-directory: upstream
+        run: |
+          make download -j4 > ../download.log 2>&1 || {
+            tail -n 150 ../download.log
+            exit 1
+          }
+      - name: Full firmware build
+        working-directory: upstream
+        run: |
+          make -j2 > ../build.log 2>&1 || {
+            tail -n 220 ../build.log
+            exit 1
+          }
+          tail -n 35 ../build.log
+      - name: Check actual FITs, kernel, SquashFS and protected NAND geometry
+        run: |
+          set -euo pipefail
+          python3 scripts/verify.py --images upstream/bin/targets/mediatek/filogic \
+            --output dist --upstream-sha "$UPSTREAM_SHA" --local-sha "$PROJECT_SHA"
+          (cd dist && sha256sum -c SHA256SUMS)
+          test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VERIFIED_WMA301_FITS_${{ needs.check.outputs.tag }}
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Publish only after all tests passed
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null | grep -qx false; then
+            echo "Existing successful release cannot be overwritten"
+            exit 0
+          fi
+          cat > release-notes.md <<EOF
+          WMA301 v2.0 **experimental pre-release; offline verified, hardware untested**.
+
+          Upstream: https://github.com/immortalwrt/immortalwrt/commit/$UPSTREAM_SHA
+          Device integration: https://github.com/$GITHUB_REPOSITORY/commit/$PROJECT_SHA
+
+          Includes initramfs recovery FIT and SquashFS sysupgrade FIT.
+          Verified: FIT hashes and actual payloads, OEM NAND 7 MiB + single UBI 121 MiB, rootdisk reference and calibration region protection.
+          This does NOT initialize the UBI volumes. Do NOT flash to OEM A/B system.
+          Failed builds never modify previous successful releases.
+          EOF
+          if ! gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" \
+              --target "$PROJECT_SHA" --title "WMA301 ImmortalWrt $UPSTREAM_SHA" \
+              --notes-file release-notes.md --draft
+          fi
+          gh release upload "$RELEASE_TAG" dist/* -R "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease
+          echo "Published: $RELEASE_TAG"
+ .config
           grep -E '^CONFIG_TARGET_.*wma301-v2=y$' .config
       - name: Download source archives
         working-directory: upstream

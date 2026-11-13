@@ -10,8 +10,11 @@ sysupgrade FIT images.
 
 * The official Linux Image, kernel ABI, kernel modules, base packages and LuCI.
 * The official ImageBuilder's FIT generation, filesystem tools and APK package repositories.
+* Aurora v1.4.0 theme's precompiled CSS/JS and Ucode templates at pinned commit `84c27b66952e6fc4be60128067a6b88bfd34afb5`. They are staged directly into the FILES overlay, without a third-party APK or matching SDK.
 * The official source's board.d, sysupgrade and U-Boot environment utilities,
   with WMA301 board cases added using our existing source integration.
+
+Aurora Ucode templates receive the same version substitutions as LuCI's `SubstituteVersion` installation. First-boot defaults use Aurora only if the current theme remains Bootstrap, while keeping Bootstrap available for fallback. See [AURORA.md](AURORA.md).
 
 The fast-path compiles **only the WMA301 DTB**, and compresses the **existing**
 official kernel Image; it does not rebuild Linux or third-party APK packages.

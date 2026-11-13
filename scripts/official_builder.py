@@ -16,6 +16,7 @@ import subprocess
 from pathlib import Path
 
 from prepare import DEVICE, prepare
+from aurora import stage as stage_aurora
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "tplink_wma301-v2"
@@ -197,7 +198,7 @@ def stage_custom_files(overlay: Path) -> list[str]:
 
 
 def stage(builder: Path, upstream: Path, overlay: Path, expected_source: str,
-          headers: Path) -> None:
+          headers: Path, aurora_source: Path) -> None:
     require(re.fullmatch(r"[0-9a-f]{40}", expected_source) is not None,
             "expected-source must be a full Git commit SHA")
     actual = subprocess.check_output(
@@ -239,6 +240,10 @@ def stage(builder: Path, upstream: Path, overlay: Path, expected_source: str,
 
     staged = stage_custom_files(overlay)
     print(f"Portable LuCI settings staged: {staged}")
+    # The Aurora assets are already compiled upstream. This installs precisely
+    # the LuCI htdocs/ and ucode/ paths, without an ABI-mismatched external APK.
+    theme = stage_aurora(aurora_source, overlay)
+    print(f"Pinned Aurora theme: {theme}")
 
     dts_dir = builder / "target/linux/mediatek/dts"
     require(dts_dir.is_dir(), "ImageBuilder lacks mediatek DTS directory")
@@ -277,6 +282,7 @@ def main() -> None:
     s.add_argument("--overlay", type=Path, required=True)
     s.add_argument("--expected-source", required=True)
     s.add_argument("--kernel-headers", type=Path, required=True)
+    s.add_argument("--aurora-source", type=Path, required=True)
     p = cmds.add_parser("packages", help="print validated ImageBuilder package names")
     p.add_argument("--file", type=Path, required=True)
     args = parser.parse_args()
@@ -287,7 +293,7 @@ def main() -> None:
     else:
         stage(args.builder.resolve(), args.upstream.resolve(),
               args.overlay.resolve(), args.expected_source,
-              args.kernel_headers.resolve())
+              args.kernel_headers.resolve(), args.aurora_source.resolve())
 
 
 if __name__ == "__main__":

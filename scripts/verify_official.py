@@ -14,12 +14,14 @@ from pathlib import Path
 
 from verify import verify_one
 from official_builder import read_packages
+from aurora import THEME_METADATA, VERSION
 
 NAME_RE = re.compile(r".*tplink_wma301-v2-squashfs-sysupgrade\.itb$")
 
 
 def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str,
-                packages_file: Path | None = None) -> dict:
+                packages_file: Path | None = None,
+                aurora_overlay: Path | None = None) -> dict:
     candidates = sorted(p for p in images.iterdir()
                         if p.is_file() and NAME_RE.fullmatch(p.name))
     if len(candidates) != 1:
@@ -29,6 +31,23 @@ def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str,
         raise ValueError("wrong official ImageBuilder target")
     if not re.fullmatch(r"[0-9a-f]{40}", local_sha):
         raise ValueError("invalid local commit")
+    if aurora_overlay is not None:
+        # Fail rather than claiming theme support when the overlay is incomplete.
+        for rel in (
+            "www/luci-static/aurora/main.css",
+            "www/luci-static/aurora/login.css",
+            "www/luci-static/resources/menu-aurora.js",
+            "usr/share/ucode/luci/template/themes/aurora/header.ut",
+            "usr/share/ucode/luci/template/themes/aurora/sysauth.ut",
+            "usr/share/licenses/luci-theme-aurora/LICENSE",
+            "etc/uci-defaults/95-luci-preferences",
+        ):
+            if not (aurora_overlay / rel).is_file():
+                raise ValueError(f"missing bundled Aurora asset: {rel}")
+        theme_template = (aurora_overlay /
+                          "usr/share/ucode/luci/template/themes/aurora/header.ut").read_text()
+        if f'data-asset-version="{VERSION}"' not in theme_template:
+            raise ValueError("Aurora template was not version-stamped")
     report = verify_one(candidates[0], persistent=True)
     output.mkdir(parents=True, exist_ok=True)
     target = output / candidates[0].name
@@ -43,6 +62,8 @@ def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str,
         "requested_packages": read_packages(packages_file) if packages_file else [],
         "output": report,
     }
+    if aurora_overlay is not None:
+        manifest["bundled_theme"] = THEME_METADATA
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (output / "SHA256SUMS").write_text(
         f"{hashlib.sha256(target.read_bytes()).hexdigest()}  {target.name}\n"
@@ -57,6 +78,8 @@ if __name__ == "__main__":
     p.add_argument("--provenance", type=Path, required=True)
     p.add_argument("--local-sha", required=True)
     p.add_argument("--packages-file", type=Path)
+    p.add_argument("--aurora-overlay", type=Path)
     args = p.parse_args()
     print(json.dumps(verify_fast(args.images, args.output, args.provenance,
-                                args.local_sha, args.packages_file), indent=2))
+                                args.local_sha, args.packages_file,
+                                args.aurora_overlay), indent=2))

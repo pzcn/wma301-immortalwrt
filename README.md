@@ -12,7 +12,7 @@
 
 默认使用 [官方 Builder 快速工作流](.github/workflows/official-builder.yml) **每天检查**官方 SNAPSHOT：内核与 APK 直接复用，单独编译 WMA301 设备树。对官方 ImageBuilder、匹配 Linux 头文件使用按 SHA256 命名的 GitHub Actions 缓存；按官方二进制哈希、代码输入和周次判断是否需要重打包。
 
-软件包在 [configs/official-packages.txt](configs/official-packages.txt) 管理，目前仅包含 `luci`。快速路径只生成 sysupgrade FIT，通过离线校验后上传 **14 天实验 Artifact**，不创建正式 Release、不自动刷机。官方配套 SDK 目前只记录来源，第三方 APK 补编留在后续计划。
+官方软件包在 [configs/official-packages.txt](configs/official-packages.txt) 管理（包括 Bootstrap 回退主题）。**Aurora v1.4.0** 独立从固定版本源码获取：快速路径只复制已编译的主题文件，不下载 SDK；完整源码后备则编译标准 LuCI 主题 APK。快速路径只生成 sysupgrade FIT，通过离线校验后上传 **14 天实验 Artifact**，不创建正式 Release、不自动刷机。官方配套 SDK 目前只记录来源，第三方 APK 补编留在后续计划。
 
 原 [完整源码构建后备](.github/workflows/firmware.yml) **改为手动运行**，保留最新 HEAD、双 FIT、离线验证与 pre-release 发布机制；不再每天或在 push 时重复完整编译。
 
@@ -23,6 +23,13 @@
 已将亚瑟的通用 LuCI 插件、简体中文、WireGuard、Tailscale、WOL、SQM、DDNS-Go 等移入 [固件软件包清单](configs/official-packages.txt)，并增加简体中文初始化。**按当前要求，WMA301 不含 sing-box 或其管理界面。** Qualcomm NSS/PPE、eMMC/F2FS、Dr.COM 和未实机验证的自定义 OTA 均不复制。
 
 完整取舍说明：[亚瑟软件同步清单](docs/ARTHUR-SOFTWARE.md)。
+
+
+## Aurora 主题
+
+默认使用与亚瑟相同的 [Aurora v1.4.0](https://github.com/eamonxg/luci-theme-aurora/tree/v1.4.0)，源码提交锁定为 `84c27b66952e6fc4be60128067a6b88bfd34afb5`；**不会锁定 ImmortalWrt 上游版本**。首次启动自动注册并默认选中 Aurora，保留官方 Bootstrap 供故障回退，且不覆盖已保存的其他主题选择。
+
+实现细节与回退方法见 [docs/AURORA.md](docs/AURORA.md)。Aurora 不依赖 sing-box；固件仍明确不安装 sing-box 或 HomeProxy。
 
 ## 固件格式与分区
 

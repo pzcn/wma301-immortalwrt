@@ -23,7 +23,15 @@
 
 ## 已移植的通用配置
 
-- `files/etc/uci-defaults/95-luci-preferences`：首次启动只设置简体中文 LuCI。不会改变 Wi-Fi、管理员密码、主题或 OTA 通道。
+- `files/etc/uci-defaults/95-luci-preferences`：简体中文 + **仅在首次引入 Aurora 且当前为默认 Bootstrap 时**切换 Aurora。保留已选择的其他主题，Bootstrap 仍可回退。不改 Wi-Fi、密码或 OTA。
+- `Aurora v1.4.0`：从与亚瑟一致的上游源码、固定 SHA `84c27b66952e6fc4be60128067a6b88bfd34afb5` 获取。快速 ImageBuilder 使用带版本戳的预编译主题资源，不额外下载 SDK；完整源码后备安装标准 LuCI 主题包。见 [AURORA.md](AURORA.md)。
+
+## Aurora 主题同步
+
+- 主题源码：`eamonxg/luci-theme-aurora`，版本 `v1.4.0`，与亚瑟同源，CI 校验提交 SHA。
+- 快速构建：向固件 overlay 添加原项目编译好的 `/www/luci-static/aurora`、LuCI JavaScript 与 Ucode 模板，带 Apache-2.0 LICENSE。**不是独立 APK，无法通过 `apk info luci-theme-aurora` 查看包安装状态。**
+- 完整源码后备：从相同源码编译 `luci-theme-aurora` 标准包。
+- 保留 `luci-theme-bootstrap`；故障时可 SSH 恢复，详见 [AURORA.md](AURORA.md)。
 
 ## 此次不移植
 
@@ -34,7 +42,6 @@
 | QCA NSS / PPE 驱动、QoS、遥测页面 | Qualcomm IPQ60xx 特有；WMA301 是 MediaTek MT7981 |
 | eMMC / F2FS / extroot 补丁 | WMA301 为单 UBI + UBIFS overlay，不需要亚瑟 eMMC 修复 |
 | Dr.COM 校园网认证 | 亚瑟当前也没有默认装进固件，WMA301 不移植 |
-| Aurora 主题 | 非官方 25.12 LuCI feed 组件；本轮保持官方主题，避免为外观编译第三方 APK |
 | 自定义 OTA / 覆盖官方 flash.js | WMA301 还未完成实机升级与 UBI 环境卷验证；必须独立实现且不能直接套用亚瑟 eMMC 升级逻辑 |
 | CPU 频率调节、autocore/default-settings-chn | 与 SoC、设备预置项关联；先不在 WMA301 强行启用 |
 

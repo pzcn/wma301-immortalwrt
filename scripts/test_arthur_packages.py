@@ -8,7 +8,7 @@ names = read_packages(ROOT / "configs/official-packages.txt")
 selected = set(p for p in names if not p.startswith("-"))
 removed = set(p[1:] for p in names if p.startswith("-"))
 required = {
-    "luci", "luci-i18n-base-zh-cn", "luci-i18n-firewall-zh-cn",
+    "luci", "luci-theme-bootstrap", "luci-i18n-base-zh-cn", "luci-i18n-firewall-zh-cn",
     "luci-app-filemanager", "luci-app-ttyd", "luci-app-nlbwmon",
     "luci-app-wifihistory", "luci-app-irqbalance", "luci-app-lldpd",
     "luci-app-pbr", "luci-app-autoreboot", "luci-proto-wireguard",
@@ -24,5 +24,6 @@ assert not any("nss" in p or "qca-ppe" in p or "f2fs" in p for p in selected)
 script = ROOT / "files/etc/uci-defaults/95-luci-preferences"
 assert script.is_file()
 assert script.stat().st_mode & 0o111, "LuCI preference script lacks executable mode"
+assert "luci-theme-aurora" not in selected, "Aurora is pinned source, not official APK"
 print(f"Arthur common software: {len(selected)} selected; "
       f"{len(removed)} excluded; no sing-box; MT7981 checks PASS")

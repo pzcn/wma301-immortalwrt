@@ -70,9 +70,11 @@ jobs:
           df -h /
       - name: Check integration scripts
         run: |
-          python3 -m py_compile scripts/prepare.py scripts/verify.py scripts/fit_inspect.py
+          python3 -m py_compile scripts/prepare.py scripts/verify.py scripts/fit_inspect.py scripts/aurora.py
           python3 scripts/test_layout.py
           python3 scripts/test_arthur_packages.py
+          python3 scripts/test_aurora.py
+          sh -n files/etc/uci-defaults/95-luci-preferences
           python3 scripts/test_sync_package_config.py
       - name: Clone current upstream (no permanent SHA lock)
         run: |
@@ -84,6 +86,15 @@ jobs:
             echo "::error::Upstream changed during check. Retry next run."
             exit 1
           }
+      - name: Fetch pinned Aurora source for full-source LuCI package
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch v1.4.0 \
+            https://github.com/eamonxg/luci-theme-aurora.git \
+            upstream/package/luci-theme-aurora
+          python3 scripts/aurora.py check --source upstream/package/luci-theme-aurora
+          # Guard first-boot theme choice ourselves, not the package script.
+          rm -f upstream/package/luci-theme-aurora/root/etc/uci-defaults/30_luci-theme-aurora
       - name: Add WMA301 OEM device and packages
         run: |
           set -euo pipefail
@@ -113,6 +124,7 @@ jobs:
           ./scripts/feeds install -a
           make defconfig
           python3 ../scripts/sync_package_config.py check --packages ../configs/official-packages.txt --config .config
+          grep -qx '^CONFIG_PACKAGE_luci-theme-aurora=y$' .config
           grep -q '^CONFIG_TARGET_mediatek_filogic=y$' .config
           grep -E '^CONFIG_TARGET_.*wma301-v2=y$' .config
       - name: Download source archives

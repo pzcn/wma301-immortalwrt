@@ -19,6 +19,8 @@ on:
       - 'configs/official-packages.txt'
       - 'files/**'
       - 'scripts/test_arthur_packages.py'
+      - 'scripts/aurora.py'
+      - 'scripts/test_aurora.py'
 permissions:
   contents: read
 concurrency:
@@ -49,7 +51,7 @@ jobs:
       - name: Fingerprint official archive, local inputs and ISO week
         id: fingerprint
         env:
-          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'files/**', '.github/workflows/official-builder.yml') }}
+          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'scripts/aurora.py', 'scripts/test_aurora.py', 'files/**', '.github/workflows/official-builder.yml') }}
           IB_SHA: ${{ steps.resolve.outputs.ib_sha }}
         run: |
           set -euo pipefail
@@ -83,8 +85,10 @@ jobs:
       - name: Check Python, device geometry and safe package list
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/official_builder.py scripts/verify_official.py
+          python3 -m py_compile scripts/official_builder.py scripts/verify_official.py scripts/aurora.py
           python3 scripts/test_official_builder.py
+          python3 scripts/test_aurora.py
+          sh -n files/etc/uci-defaults/95-luci-preferences
           python3 scripts/test_layout.py
           python3 scripts/test_arthur_packages.py
           python3 scripts/official_builder.py packages --file configs/official-packages.txt
@@ -215,6 +219,12 @@ jobs:
             "linux-$VERSION/include/uapi/linux/input-event-codes.h"
           test -f "kernel-source/linux-$VERSION/include/dt-bindings/input/linux-event-codes.h"
           echo "path=$PWD/kernel-source/linux-$VERSION/include" >> "$GITHUB_OUTPUT"
+      - name: Fetch and validate pinned Aurora v1.4.0 (prebuilt LuCI assets)
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch v1.4.0 \
+            https://github.com/eamonxg/luci-theme-aurora.git aurora-theme
+          python3 scripts/aurora.py check --source aurora-theme
       - name: Stage WMA301 profile, DTB and board-specific files
         env:
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
@@ -224,7 +234,8 @@ jobs:
           BUILDER="$(find "$PWD/builder-unpacked" -mindepth 1 -maxdepth 1 -type d -print -quit)"
           python3 scripts/official_builder.py stage --builder "$BUILDER" \
             --upstream "$PWD/upstream" --overlay "$PWD/wma301-overlay" \
-            --expected-source "$SOURCE_SHA" --kernel-headers "$HEADERS"
+            --expected-source "$SOURCE_SHA" --kernel-headers "$HEADERS" \
+            --aurora-source "$PWD/aurora-theme"
           echo "BUILDER=$BUILDER" >> "$GITHUB_ENV"
       - name: Repack FIT using official precompiled Linux kernel
         run: |
@@ -242,7 +253,8 @@ jobs:
           set -euo pipefail
           python3 scripts/verify_official.py --images images --output dist \
             --provenance official-provenance.json --local-sha "$GITHUB_SHA" \
-            --packages-file configs/official-packages.txt
+            --packages-file configs/official-packages.txt \
+            --aurora-overlay "$PWD/wma301-overlay"
           (cd dist && sha256sum -c SHA256SUMS)
           test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 1
       - name: Upload experimental verified FIT (NO Release)
@@ -269,6 +281,7 @@ jobs:
             printf '| Device integration commit | %s |\n' "$GITHUB_SHA"
             printf '| Builder archive cache hit | %s |\n' "$IB_CACHE"
             printf '| Linux source archive cache hit | %s |\n' "$KERNEL_CACHE"
+            echo '| Aurora | v1.4.0 pinned source / prebuilt assets |'
             echo '| Output | Experimental sysupgrade FIT (no recovery) |'
             echo '| Hardware validation | Not tested — do not auto-flash |'
             printf '\n[Download verified Artifact](https://github.com/%s/actions/runs/%s)\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"

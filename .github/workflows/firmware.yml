@@ -15,6 +15,10 @@ on:
       - '.github/workflows/firmware.yml'
       - 'device/**'
       - 'scripts/**'
+      # These are isolated fast-path files; do not invoke full source build.
+      - '!scripts/official_builder.py'
+      - '!scripts/verify_official.py'
+      - '!scripts/test_official_builder.py'
       - 'configs/**'
 
 permissions:

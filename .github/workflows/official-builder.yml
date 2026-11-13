@@ -272,6 +272,9 @@ jobs:
             --ota-stamp "$PWD/wma301-overlay/etc/wma301-ota-release"
           (cd dist && sha256sum -c SHA256SUMS)
           test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 1
+          # Exercise the real promotion metadata generator against this FIT.
+          # This preview stays off-Artifact and does not create a Release.
+          python3 scripts/wma301_ota.py metadata --dist dist             --build "$GITHUB_RUN_ID" --source-sha "$GITHUB_SHA"             --channel testing --output "$RUNNER_TEMP/wma301-ota-preview.json"
       - name: Upload experimental verified FIT (NO Release)
         uses: actions/upload-artifact@v4
         with:

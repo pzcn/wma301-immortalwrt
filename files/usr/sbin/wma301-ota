@@ -164,6 +164,8 @@ download() {
 }
 apply() {
     armed || die "Manual flash is disabled (wma301-ota.main.enable_flash=1)"
+    [ -d "$WORK/operation.lock" ] || die "Start manual OTA using the start command"
+    trap 'rmdir "$WORK/operation.lock" 2>/dev/null || true' EXIT
     lookup
     newer || die "Refusing downgrade/same version"
     check_ubi
@@ -179,6 +181,9 @@ start() {
     newer || die "No newer version"
     check_ubi
     verify_cache
+    # Hold the same lock as download until sysupgrade completes. Concurrent
+    # downloads may otherwise truncate a FIT while it is being flashed.
+    mkdir "$WORK/operation.lock" || die "Another OTA operation is active"
     (nohup "$0" apply </dev/null >"$WORK/update.log" 2>&1 &)
     printf '{"started":true,"auto":false}\n'
 }

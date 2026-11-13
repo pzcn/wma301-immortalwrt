@@ -14,6 +14,10 @@ BOARD = "tplink,wma301-v2"
 PROFILE = "tplink_wma301-v2"
 LAYOUT = "oem-bl2-bl31-custom-bl33-single-ubi-v1"
 IMAGE = "immortalwrt-mediatek-filogic-tplink_wma301-v2-squashfs-sysupgrade.itb"
+# Official ImageBuilder prepends its snapshot version to the local FIT name.
+# The promoted OTA asset is always renamed to IMAGE for stable device URLs.
+SOURCE_IMAGE_RE = re.compile(r"immortalwrt(?:-[a-z0-9.]+)*-mediatek-filogic-"
+                             r"tplink_wma301-v2-squashfs-sysupgrade\.itb\Z")
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 CHANNELS = ("testing", "stable")
@@ -70,23 +74,28 @@ def metadata(dist: Path, build: int, source: str, channel: str, out: Path) -> di
     require(builder.get("imagebuilder_sha256") == ota.get("builder_sha256") and
             SHA256.fullmatch(ota.get("builder_sha256", "")) is not None,
             "ImageBuilder identity mismatch")
-    image = dist / IMAGE
-    require(image.is_file() and 1_000_000 < image.stat().st_size < MAX_IMAGE,
-            "unexpected FIT filename or size")
+    # Do not pin the source snapshot version into the firmware filename.
+    names = [p for p in dist.iterdir()
+             if p.is_file() and SOURCE_IMAGE_RE.fullmatch(p.name)]
+    require(len(names) == 1, "expected exactly one WMA301 sysupgrade FIT")
+    image = names[0]
+    require(1_000_000 < image.stat().st_size < MAX_IMAGE,
+            "unexpected FIT size")
     digest = sha256(image)
     report = doc.get("output", {})
-    require(report.get("file") == IMAGE and report.get("sha256") == digest and
+    require(report.get("file") == image.name and report.get("sha256") == digest and
             report.get("fit_hashes") == "pass" and
             report.get("mode") == "squashfs-persistent" and
             report.get("dts", {}).get("compatible") == BOARD and
             report.get("dts", {}).get("factory_info_protected") is True,
             "FIT did not pass WMA301 offline inspection")
     sums = (dist / "SHA256SUMS").read_text().splitlines()
-    require(sums == [f"{digest}  {IMAGE}"], "SHA256SUMS mismatch")
+    require(sums == [f"{digest}  {image.name}"], "SHA256SUMS mismatch")
     tag = f"wma301-ota-{channel}-r{build}"
     data = {"schema": 2, "repository": REPO, "channel": f"wma301-{channel}",
             "tag": tag, "build": build, "board": BOARD, "profile": PROFILE,
-            "layout": LAYOUT, "image": IMAGE, "image_sha256": digest,
+            "layout": LAYOUT, "image": IMAGE, "source_image": image.name,
+            "image_sha256": digest,
             "image_size": image.stat().st_size, "source_sha": source,
             "immortalwrt_revision": builder.get("source_revision", ""),
             "builder_sha256": ota["builder_sha256"],

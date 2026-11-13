@@ -19,7 +19,10 @@ with TemporaryDirectory() as folder:
     assert "OTA_BOARD=" + BOARD in release
     dest = root / "dist"
     dest.mkdir()
-    image = dest / IMAGE
+    # Real ImageBuilder outputs contain a snapshot revision in the filename.
+    source_image = ("immortalwrt-25.12-snapshot-r38263-84b665b5de-" +
+                    "mediatek-filogic-tplink_wma301-v2-squashfs-sysupgrade.itb")
+    image = dest / source_image
     image.write_bytes(b"Q" * 1_000_100)
     digest = sha256(image)
     manifest = {"build": "official-imagebuilder-fast", "device": BOARD,
@@ -28,15 +31,16 @@ with TemporaryDirectory() as folder:
                 "builder": {"target": "mediatek/filogic",
                             "imagebuilder_sha256": binary_sha,
                             "source_revision": "123456789abc"},
-                "output": {"file": IMAGE, "sha256": digest,
+                "output": {"file": source_image, "sha256": digest,
                            "fit_hashes": "pass", "mode": "squashfs-persistent",
                            "dts": {"compatible": BOARD, "factory_info_protected": True}}}
     def save():
         (dest / "manifest.json").write_text(json.dumps(manifest))
-        (dest / "SHA256SUMS").write_text(f"{sha256(image)}  {IMAGE}\n")
+        (dest / "SHA256SUMS").write_text(f"{sha256(image)}  {source_image}\n")
     save()
     data = metadata(dest, 12345, source, "testing", dest / "ota.json")
     assert data["tag"] == "wma301-ota-testing-r12345"
+    assert data["image"] == IMAGE and data["source_image"] == source_image
     assert data["repository"] == REPO
     assert data["auto_upgrade"] is False
     assert json.loads((dest / "ota.json").read_text()) == data

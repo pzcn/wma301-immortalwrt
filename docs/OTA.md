@@ -30,7 +30,7 @@
 - `channel=testing`：测试发布，创建 GitHub prerelease；默认设备不会检测它，需明确切换测试通道。
 - `channel=stable`：公开稳定发布；必须输入确认字串 `WMA301_UBI_SYSUPGRADE_HARDWARE_VERIFIED`，表示已在实机验证 UBI 环境卷、保留配置、启动及回退。
 
-发布工作流再次从原运行下载 Artifact，检查该运行成功、属于本仓库主分支及指定快速工作流，再核验镜像 SHA256、真实 FIT/DTS 和本机嵌入 OTA 身份，生成 `ota.json`，以**不可覆盖的独立 tag**发布 FIT、校验和与 manifest。重复 tag 直接失败。
+发布工作流再次从原运行下载 Artifact，检查该运行成功、属于本仓库主分支及指定快速工作流，再核验镜像 SHA256、真实 FIT/DTS 和本机嵌入 OTA 身份。由于官方 ImageBuilder 产物带有快照版本前缀，发布器会**严格验证原始文件名后统一重命名为固定 OTA FIT 附件名**，重新生成对应 SHA256SUMS 和 `ota.json`，以**不可覆盖的独立 tag**发布 FIT、校验和与 manifest。重复 tag 直接失败。
 
 **未完成实机验证时，只允许 testing prerelease，不应创建 stable OTA Release。**
 

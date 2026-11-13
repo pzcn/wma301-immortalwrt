@@ -82,13 +82,22 @@ jobs:
           set -euo pipefail
           IMAGE=immortalwrt-mediatek-filogic-tplink_wma301-v2-squashfs-sysupgrade.itb
           (cd ota-input/dist && sha256sum -c SHA256SUMS)
+          SOURCE_IMAGE="$(find ota-input/dist -maxdepth 1 -type f \
+            -name '*tplink_wma301-v2-squashfs-sysupgrade.itb' -print -quit)"
+          test -n "$SOURCE_IMAGE" && test -s "$SOURCE_IMAGE"
           PYTHONPATH=scripts python3 -c \
             'import sys; from pathlib import Path; from verify import verify_one; verify_one(Path(sys.argv[1]), True)' \
-            "ota-input/dist/$IMAGE"
+            "$SOURCE_IMAGE"
           mkdir -p ota-release
           python3 scripts/wma301_ota.py metadata --dist ota-input/dist \
             --build "$SOURCE_RUN" --source-sha "$SOURCE_SHA" \
             --channel "$CHANNEL" --output ota-release/ota.json
+          SOURCE_BASENAME="$(jq -r .source_image ota-release/ota.json)"
+          test -f "ota-input/dist/$SOURCE_BASENAME"
+          cp "ota-input/dist/$SOURCE_BASENAME" "ota-release/$IMAGE"
+          HASH="$(jq -r .image_sha256 ota-release/ota.json)"
+          printf '%s  %s\n' "$HASH" "$IMAGE" > ota-release/SHA256SUMS
+          (cd ota-release && sha256sum -c SHA256SUMS)
           # The build metadata's official artifact must match its copied copy.
           python3 - <<'PY'
           import json
@@ -122,13 +131,13 @@ jobs:
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
               --target "$SOURCE_SHA" --title "WMA301 OTA testing — run $SOURCE_RUN" \
               --notes-file ota-release/NOTES.md --latest=false --prerelease \
-              ota-input/dist/*.itb ota-input/dist/SHA256SUMS \
+              ota-release/$IMAGE ota-release/SHA256SUMS \
               ota-input/dist/manifest.json ota-release/ota.json
           else
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
               --target "$SOURCE_SHA" --title "WMA301 OTA stable — run $SOURCE_RUN" \
               --notes-file ota-release/NOTES.md --latest=false \
-              ota-input/dist/*.itb ota-input/dist/SHA256SUMS \
+              ota-release/$IMAGE ota-release/SHA256SUMS \
               ota-input/dist/manifest.json ota-release/ota.json
           fi
           echo "Published immutable OTA channel asset: $TAG" >> "$GITHUB_STEP_SUMMARY"

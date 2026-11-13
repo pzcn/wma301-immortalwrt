@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from official_builder import (
     IMAGEBUILDER, PROFILE, parse_checksums, register_profile, resolve,
-    prepare_kernel_image, locate_kernel,
+    prepare_kernel_image, locate_kernel, read_packages,
 )
 
 
@@ -52,6 +52,25 @@ def run() -> None:
             pass
         else:
             raise AssertionError("untrusted version accepted")
+
+        packages = root / "packages.txt"
+        packages.write_text("# base\nluci # Web UI\n-kmod-test\n")
+        assert read_packages(packages) == ["luci", "-kmod-test"]
+        packages.write_text("luci\nluci\n")
+        try:
+            read_packages(packages)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("duplicate package was accepted")
+        for bad in ("luci;id", "$(echo unsafe)", "../../package", "luci something"):
+            packages.write_text(bad + "\n")
+            try:
+                read_packages(packages)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError(f"unsafe package name was accepted: {bad}")
 
         target = root / ".targetinfo"
         target.write_text(

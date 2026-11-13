@@ -1,31 +1,94 @@
 name: WMA301 | Official ImageBuilder fast-path (experimental)
+
 on:
+  schedule:
+    - cron: '41 2 * * *'
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - '.github/workflows/official-builder.yml'
       - 'scripts/official_builder.py'
+      - 'scripts/prepare.py'
       - 'scripts/verify_official.py'
+      - 'scripts/verify.py'
+      - 'scripts/fit_inspect.py'
       - 'scripts/test_official_builder.py'
+      - 'scripts/test_layout.py'
       - 'device/**'
+      - 'configs/official-packages.txt'
 permissions:
   contents: read
 concurrency:
-  group: official-builder
+  group: wma301-official-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    env:
+      BASE: https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/mediatek/filogic
+    outputs:
+      ib_sha: ${{ steps.resolve.outputs.ib_sha }}
+      fingerprint: ${{ steps.fingerprint.outputs.key }}
+      required: ${{ steps.decide.outputs.required }}
+      previous_success: ${{ steps.previous.outputs.cache-hit }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check official snapshot SHA256
+        id: resolve
+        run: |
+          set -euo pipefail
+          mkdir -p official-index
+          curl -fsSL --retry 3 -o official-index/version.buildinfo "$BASE/version.buildinfo"
+          curl -fsSL --retry 3 -o official-index/sha256sums "$BASE/sha256sums"
+          python3 scripts/official_builder.py resolve --index official-index --output official-provenance.json
+          sha="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder_sha256"])')"
+          echo "ib_sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Fingerprint official archive, local inputs and ISO week
+        id: fingerprint
+        env:
+          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', '.github/workflows/official-builder.yml') }}
+          IB_SHA: ${{ steps.resolve.outputs.ib_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$INPUT_SHA"
+          week="$(date -u +%G-W%V)"
+          echo "key=wma301-fast-ok-v1-$IB_SHA-$INPUT_SHA-$week" >> "$GITHUB_OUTPUT"
+      - name: Lookup successful fingerprint without downloading cache
+        uses: actions/cache/restore@v4
+        id: previous
+        with:
+          path: fast-success.marker
+          key: ${{ steps.fingerprint.outputs.key }}
+          lookup-only: true
+      - name: Decide whether to build
+        id: decide
+        env:
+          HIT: ${{ steps.previous.outputs.cache-hit }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = schedule ] && [ "$HIT" = true ]; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+            echo "Unchanged official release and local inputs: already built this week."
+          else
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "Manual/push run or new snapshot: build required."
+          fi
+
   offline-tests:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Unit tests and existing device geometry checks
+      - name: Check Python, device geometry and safe package list
         run: |
+          set -euo pipefail
           python3 -m py_compile scripts/official_builder.py scripts/verify_official.py
           python3 scripts/test_official_builder.py
           python3 scripts/test_layout.py
+          python3 scripts/official_builder.py packages --file configs/official-packages.txt
+
   fast-build:
-    needs: offline-tests
+    needs: [metadata, offline-tests]
+    if: needs.metadata.outputs.required == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
@@ -33,42 +96,65 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install host tools and prepare disk
+      - name: Verify runner tools
         run: |
           set -euo pipefail
-          # Keep the preinstalled runner intact; deleting toolchains costs more than the image repack.
-          missing=()
-          for tool in zstd gcc cpp make perl python3 rsync xz curl git unzip file gzip; do
-            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+          missing=""
+          for cmd in zstd gcc cpp make perl python3 rsync xz curl git unzip file gzip sha256sum tar gh; do
+            command -v "$cmd" >/dev/null 2>&1 || missing="$missing $cmd"
           done
-          if (("${#missing[@]}")); then
-            echo "::error::Missing preinstalled tools: ${missing[*]}"
-            exit 1
-          fi
+          if [ -n "$missing" ]; then echo "::error::Missing tools:$missing"; exit 1; fi
           df -h /
-      - name: Resolve exact official binary revision
+      - name: Resolve matching upstream commit and detect snapshot race
         id: source
+        env:
+          EXPECTED_IB_SHA: ${{ needs.metadata.outputs.ib_sha }}
         run: |
           set -euo pipefail
           mkdir -p official-index downloads kernel-source
-          curl -fL --retry 3 -o official-index/version.buildinfo "$BASE/version.buildinfo"
-          curl -fL --retry 3 -o official-index/sha256sums "$BASE/sha256sums"
+          curl -fsSL --retry 3 -o official-index/version.buildinfo "$BASE/version.buildinfo"
+          curl -fsSL --retry 3 -o official-index/sha256sums "$BASE/sha256sums"
           python3 scripts/official_builder.py resolve --index official-index --output official-provenance.json
+          ACTUAL="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder_sha256"])')"
+          if [ "$ACTUAL" != "$EXPECTED_IB_SHA" ]; then
+            echo "::error::Official snapshot changed during this build. Retry."
+            exit 1
+          fi
           SHORT="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["source_revision"])')"
           SHA="$(gh api "repos/immortalwrt/immortalwrt/commits/$SHORT" --jq .sha)"
           [[ "$SHA" == "$SHORT"* ]]
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-      - name: Download and verify official ImageBuilder
+      - uses: actions/cache/restore@v4
+        id: ib_cache
+        name: Restore checksum-keyed official ImageBuilder
+        with:
+          path: downloads/immortalwrt-imagebuilder-25.12-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst
+          key: wma301-ib-v1-${{ runner.os }}-${{ needs.metadata.outputs.ib_sha }}
+      - name: Download missing Builder and always verify SHA256
         run: |
           set -euo pipefail
           IB="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder"])')"
           EXPECTED="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder_sha256"])')"
-          curl -fL --retry 3 --retry-delay 5 -o "downloads/$IB" "$BASE/$IB"
+          if [ ! -f "downloads/$IB" ]; then
+            curl -fL --retry 3 --retry-delay 5 -o "downloads/$IB" "$BASE/$IB"
+          else
+            echo "ImageBuilder cache hit: $IB"
+          fi
           printf '%s  %s\n' "$EXPECTED" "downloads/$IB" | sha256sum -c -
-          mkdir builder-unpacked
+      - uses: actions/cache/save@v4
+        name: Save verified ImageBuilder archive
+        if: steps.ib_cache.outputs.cache-hit != 'true'
+        with:
+          path: downloads/immortalwrt-imagebuilder-25.12-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst
+          key: wma301-ib-v1-${{ runner.os }}-${{ needs.metadata.outputs.ib_sha }}
+      - name: Extract official ImageBuilder
+        run: |
+          set -euo pipefail
+          IB="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder"])')"
+          mkdir -p builder-unpacked
           tar --zstd -xf "downloads/$IB" -C builder-unpacked
           test "$(find builder-unpacked -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
-      - name: Fetch exact matching ImmortalWrt integration source
+      - name: Checkout the official matching integration source
         env:
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
         run: |
@@ -78,8 +164,8 @@ jobs:
           git -C upstream fetch -q --depth 1 origin "$SOURCE_SHA"
           git -C upstream -c advice.detachedHead=false checkout -q --detach FETCH_HEAD
           test "$(git -C upstream rev-parse HEAD)" = "$SOURCE_SHA"
-      - name: Fetch checksum-matched Linux device-tree headers only
-        id: headers
+      - name: Resolve Linux kernel source SHA
+        id: kernel
         run: |
           set -euo pipefail
           KFILE=upstream/target/linux/generic/kernel-6.12
@@ -88,17 +174,45 @@ jobs:
           VERSION="6.12.$PATCH"
           EXPECTED="$(awk -F' = ' -v key="LINUX_KERNEL_HASH-$VERSION" '$1 == key {print $2}' "$KFILE")"
           [[ "$EXPECTED" =~ ^[a-f0-9]{64}$ ]]
-          curl -fL --retry 3 --retry-delay 3 -o kernel-source/kernel.tar.xz \
-            "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$VERSION.tar.xz"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$EXPECTED" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: kernel_cache
+        name: Restore checksum-keyed Linux header source
+        with:
+          path: kernel-source/kernel.tar.xz
+          key: wma301-dt-headers-v1-${{ steps.kernel.outputs.sha }}
+      - name: Download missing Linux source and verify SHA256
+        env:
+          VERSION: ${{ steps.kernel.outputs.version }}
+          EXPECTED: ${{ steps.kernel.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ ! -f kernel-source/kernel.tar.xz ]; then
+            curl -fL --retry 3 --retry-delay 3 -o kernel-source/kernel.tar.xz \
+              "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$VERSION.tar.xz"
+          else
+            echo "Linux source cache hit: $VERSION"
+          fi
           printf '%s  %s\n' "$EXPECTED" kernel-source/kernel.tar.xz | sha256sum -c -
-          # The upstream dt-bindings/input/linux-event-codes.h is a symlink
-          # into include/uapi, so extracting dt-bindings alone is incomplete.
+      - uses: actions/cache/save@v4
+        name: Save verified Linux source archive
+        if: steps.kernel_cache.outputs.cache-hit != 'true'
+        with:
+          path: kernel-source/kernel.tar.xz
+          key: wma301-dt-headers-v1-${{ steps.kernel.outputs.sha }}
+      - name: Extract only device tree headers and symlink target
+        id: headers
+        env:
+          VERSION: ${{ steps.kernel.outputs.version }}
+        run: |
+          set -euo pipefail
           tar -xJf kernel-source/kernel.tar.xz -C kernel-source \
             "linux-$VERSION/include/dt-bindings" \
             "linux-$VERSION/include/uapi/linux/input-event-codes.h"
           test -f "kernel-source/linux-$VERSION/include/dt-bindings/input/linux-event-codes.h"
           echo "path=$PWD/kernel-source/linux-$VERSION/include" >> "$GITHUB_OUTPUT"
-      - name: Inject local device profile and prebuilt kernel
+      - name: Stage WMA301 profile, DTB and board-specific files
         env:
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
           HEADERS: ${{ steps.headers.outputs.path }}
@@ -109,24 +223,26 @@ jobs:
             --upstream "$PWD/upstream" --overlay "$PWD/wma301-overlay" \
             --expected-source "$SOURCE_SHA" --kernel-headers "$HEADERS"
           echo "BUILDER=$BUILDER" >> "$GITHUB_ENV"
-      - name: ImageBuilder repack (no kernel compilation)
+      - name: Repack FIT using official precompiled Linux kernel
         run: |
           set -euo pipefail
+          PACKAGES="$(python3 scripts/official_builder.py packages --file configs/official-packages.txt)"
           mkdir -p "$PWD/images"
           make -C "$BUILDER" info > builder-info.log
           grep -q 'tplink_wma301-v2:' builder-info.log
           make -C "$BUILDER" image PROFILE=tplink_wma301-v2 \
-            PACKAGES=luci FILES="$PWD/wma301-overlay" BIN_DIR="$PWD/images" \
+            PACKAGES="$PACKAGES" FILES="$PWD/wma301-overlay" BIN_DIR="$PWD/images" \
             > repack.log 2>&1 || { tail -n 200 repack.log; exit 1; }
           tail -n 35 repack.log
-      - name: Verify WMA301 FIT geometry, hashes and source metadata
+      - name: Verify FIT geometry, hashes, metadata and package list
         run: |
           set -euo pipefail
           python3 scripts/verify_official.py --images images --output dist \
-            --provenance official-provenance.json --local-sha "$GITHUB_SHA"
+            --provenance official-provenance.json --local-sha "$GITHUB_SHA" \
+            --packages-file configs/official-packages.txt
           (cd dist && sha256sum -c SHA256SUMS)
           test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 1
-      - name: Upload experimental artifact only, never publish Release
+      - name: Upload experimental verified FIT (NO Release)
         uses: actions/upload-artifact@v4
         with:
           name: WMA301_OFFICIAL_BUILDER_EXPERIMENT
@@ -135,3 +251,13 @@ jobs:
             official-provenance.json
           if-no-files-found: error
           retention-days: 14
+      - name: Write successful fingerprint after artifact upload
+        if: needs.metadata.outputs.previous_success != 'true'
+        run: |
+          printf '%s\n' '${{ needs.metadata.outputs.fingerprint }}' > fast-success.marker
+      - uses: actions/cache/save@v4
+        name: Cache success marker only after verified artifact upload
+        if: needs.metadata.outputs.previous_success != 'true'
+        with:
+          path: fast-success.marker
+          key: ${{ needs.metadata.outputs.fingerprint }}

@@ -1,0 +1,5 @@
+# Official ImageBuilder profile package overrides.
+# One package per line. This file is deliberately small at first.
+# Example: luci-app-ttyd
+# Example: -unwanted-default-package
+luci

@@ -13,11 +13,13 @@ import re
 from pathlib import Path
 
 from verify import verify_one
+from official_builder import read_packages
 
 NAME_RE = re.compile(r".*tplink_wma301-v2-squashfs-sysupgrade\.itb$")
 
 
-def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str) -> dict:
+def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str,
+                packages_file: Path | None = None) -> dict:
     candidates = sorted(p for p in images.iterdir()
                         if p.is_file() and NAME_RE.fullmatch(p.name))
     if len(candidates) != 1:
@@ -38,6 +40,7 @@ def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str) ->
         "hardware_validation": "NOT_TESTED",
         "builder": source,
         "local_sha": local_sha,
+        "requested_packages": read_packages(packages_file) if packages_file else [],
         "output": report,
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -53,6 +56,7 @@ if __name__ == "__main__":
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--provenance", type=Path, required=True)
     p.add_argument("--local-sha", required=True)
+    p.add_argument("--packages-file", type=Path)
     args = p.parse_args()
     print(json.dumps(verify_fast(args.images, args.output, args.provenance,
-                                args.local_sha), indent=2))
+                                args.local_sha, args.packages_file), indent=2))

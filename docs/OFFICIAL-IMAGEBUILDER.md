@@ -37,22 +37,27 @@ of silently compiling against an unrelated source.
 
 ## Build and artifacts
 
-1. Run the **WMA301 | Official ImageBuilder fast-path (experimental)** workflow.
+1. The daily schedule, matching push changes, or a manual dispatch start the **WMA301 | Official ImageBuilder fast-path (experimental)** workflow.
 2. Offline tests run before downloading the approximately 1 GiB Builder.
 3. The workflow adds the WMA301 profile, local DTS, and WMA301 runtime hooks.
-4. `make image PROFILE=tplink_wma301-v2 PACKAGES=luci FILES=...` builds the
-   persistent `squashfs-sysupgrade.itb`.
+4. `configs/official-packages.txt` selects packages; `make image PROFILE=tplink_wma301-v2 PACKAGES="..." FILES=...` builds the persistent `squashfs-sysupgrade.itb`.
 5. `verify_official.py` runs the same FIT hash, image contents and NAND/DTS
    checks as `verify.py`.
 
-The workflow uploads only a short-lived GitHub Actions artifact, **not a
-Release**. The existing full-source releases are not replaced or modified.
+The workflow uploads only a 14-day GitHub Actions artifact, **not a Release**.
+It caches verified Builder/kernel source archives by SHA256, and skips duplicate
+scheduled builds with the same Builder + local inputs in the same ISO week.
+Manual runs always rebuild. The original full-source **manual fallback** still
+produces recovery + sysupgrade FITs and retains its pre-release mechanism.
+
+See [build plan, schedule, cache policy and maintenance procedure](BUILD-RUNBOOK.md).
 
 ## Important limitations
 
 * Official ImageBuilder does **not** compile device initramfs recovery images.
   Use the full-source build for `initramfs-recovery.itb`.
-* This phase uses the official packages and only adds the `luci` package.
+* This phase uses the official packages and initially requests only `luci` from
+  `configs/official-packages.txt`. Change that file to add future packages.
   Third-party SDK APK compilation is intentionally not wired into the workflow
   yet. The official matching SDK name/SHA is recorded in provenance metadata.
 * This is **offline validation only**. Power-cycle persistence, actual flash

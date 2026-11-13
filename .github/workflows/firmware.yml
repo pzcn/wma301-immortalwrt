@@ -1,25 +1,13 @@
 name: WMA301 | Follow ImmortalWrt, build and release
 
+# Explicit full-source fallback. The daily official check lives in official-builder.yml.
 on:
-  schedule:
-    - cron: '17 2 * * *'
   workflow_dispatch:
     inputs:
       force:
         description: Rebuild even if identical release already exists
         type: boolean
         default: false
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/firmware.yml'
-      - 'device/**'
-      - 'scripts/**'
-      # These are isolated fast-path files; do not invoke full source build.
-      - '!scripts/official_builder.py'
-      - '!scripts/verify_official.py'
-      - '!scripts/test_official_builder.py'
-      - 'configs/**'
 
 permissions:
   contents: write

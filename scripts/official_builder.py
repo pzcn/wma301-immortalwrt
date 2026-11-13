@@ -51,6 +51,25 @@ def parse_checksums(text: str) -> dict[str, str]:
     return result
 
 
+PACKAGE_RE = re.compile(r"-?[A-Za-z0-9][A-Za-z0-9_.+\-]*")
+
+
+def read_packages(path: Path) -> list[str]:
+    """Load an auditable ImageBuilder package list without shell interpolation."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        name = line.split("#", 1)[0].strip()
+        if not name:
+            continue
+        require(PACKAGE_RE.fullmatch(name) is not None,
+                f"{path}:{lineno}: invalid package name: {name!r}")
+        require(name not in seen, f"{path}:{lineno}: duplicate package: {name}")
+        seen.add(name)
+        names.append(name)
+    return names
+
+
 def resolve(index: Path, output: Path) -> dict:
     version = (index / "version.buildinfo").read_text().strip()
     match = VERSION_RE.fullmatch(version)
@@ -234,9 +253,13 @@ def main() -> None:
     s.add_argument("--overlay", type=Path, required=True)
     s.add_argument("--expected-source", required=True)
     s.add_argument("--kernel-headers", type=Path, required=True)
+    p = cmds.add_parser("packages", help="print validated ImageBuilder package names")
+    p.add_argument("--file", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "resolve":
         print(json.dumps(resolve(args.index, args.output), indent=2))
+    elif args.command == "packages":
+        print(" ".join(read_packages(args.file)))
     else:
         stage(args.builder.resolve(), args.upstream.resolve(),
               args.overlay.resolve(), args.expected_source,

@@ -6,34 +6,17 @@
 
 - [pzcn/bl-mt798x-dhcpd](https://github.com/pzcn/bl-mt798x-dhcpd/tree/wma301)：自定义 Yuzhii BL33 / Web / DHCP。
 - [pzcn/wma301-openwrt](https://github.com/pzcn/wma301-openwrt)：原厂 NAND 迁移、首装、FIP 重打包和恢复工具。
-- **这里**：每次从官方 `immortalwrt/immortalwrt` 的 `openwrt-25.12` 分支获取实时 HEAD，使用本仓库设备适配构建两种 FIT 固件。
+- **这里**：优先利用官方 `25.12-SNAPSHOT/mediatek/filogic` 已编译的内核、驱动和软件包，快速生成 sysupgrade FIT；必要时手工执行最新 HEAD 完整源码构建，得到双 FIT。
 
-## 官方 ImageBuilder 快速构建（实验）
+## 构建策略：官方 ImageBuilder 优先
 
-新增独立工作流 [official-builder.yml](.github/workflows/official-builder.yml)，
-优先复用官方 ImmortalWrt `25.12-SNAPSHOT/mediatek/filogic`
-已经编译好的内核、驱动、基础软件包和 ImageBuilder。以官方二进制的
-`version.buildinfo` 源码修订为基准，增量注入本设备 DTS、profile、
-网络/MAC/环境/升级逻辑，**只单独编译设备树，不重新编译内核**。
+默认使用 [官方 Builder 快速工作流](.github/workflows/official-builder.yml) **每天检查**官方 SNAPSHOT：内核与 APK 直接复用，单独编译 WMA301 设备树。对官方 ImageBuilder、匹配 Linux 头文件使用按 SHA256 命名的 GitHub Actions 缓存；按官方二进制哈希、代码输入和周次判断是否需要重打包。
 
-该流程目前仅生成 `squashfs-sysupgrade.itb`，运行当前 FIT/DTS/NAND
-离线校验，仅上传 GitHub Actions 实验 Artifact，不发布 Release，
-也不自动刷入设备。官方配套 SDK 只记录名称和 SHA256，暂未接入缺包补编。
-详情：[官方 Builder 设计与限制](docs/OFFICIAL-IMAGEBUILDER.md)。
+软件包在 [configs/official-packages.txt](configs/official-packages.txt) 管理，目前仅包含 `luci`。快速路径只生成 sysupgrade FIT，通过离线校验后上传 **14 天实验 Artifact**，不创建正式 Release、不自动刷机。官方配套 SDK 目前只记录来源，第三方 APK 补编留在后续计划。
 
-**原 `firmware.yml` 完整源码构建、双 FIT 输出和成功才发布的策略均保留，作为后备。**
-新快速路径修改不会触发旧工作流的 push 全量构建。
+原 [完整源码构建后备](.github/workflows/firmware.yml) **改为手动运行**，保留最新 HEAD、双 FIT、离线验证与 pre-release 发布机制；不再每天或在 push 时重复完整编译。
 
-## 自动化策略
-
-- GitHub Actions 每天执行一次；未发现上游或本仓库代码变化时不重复编译。
-- 有变化即构建并做 FIT 哈希、Linux DTS / NAND 边界、卷名、文件尺寸等离线验证。
-- **只有所有步骤完成才新建 GitHub Release**；失败不覆盖、不删除、不改动之前成功发布的 Release。下一次检查会再次尝试。
-- 发布带实际使用的上游 SHA、本仓库 SHA、SHA256SUMS；为了区分离线测试与实机验证，当前使用 **pre-release** 标记。
-- 支持 Actions 页面手动运行，`force=true` 时即使没有上游变化也可重新测试。
-- GitHub Actions 定时计划是近似调度，偶尔可能延迟或跳过；不保证精确到分钟。
-
-工作流：[.github/workflows/firmware.yml](.github/workflows/firmware.yml)
+**维护入口：[完整构建计划、流程、故障处理和后续任务](docs/BUILD-RUNBOOK.md)**。另见 [官方 Builder 技术说明](docs/OFFICIAL-IMAGEBUILDER.md)。
 
 ## 固件格式与分区
 
@@ -57,7 +40,8 @@ UBI 中使用 `fit`（本项目的 SquashFS FIT）、`ubootenv`、`ubootenv2`、
 - `configs/wma301.config`：系统选项。
 - `scripts/prepare.py`：在临时下载的官方树中添加 WMA301 定义、网络、FIT 升级识别；遇到官方原生定义或不匹配直接失败，不强行覆盖。
 - `scripts/verify.py`：在编译之后检查两个 FIT 镜像、签名/哈希和实际 DTS 分区协议。
-- `firmware.yml`：每日检查、拉取官方分支最新提交、编译、审计、发布。
+- `official-builder.yml`：每天检查官方二进制、复用缓存、重打包、上传实验 Artifact。
+- `firmware.yml`：手工运行的 HEAD 完整源码双 FIT 构建与预发布后备。
 
 **限制：** 当前仅做源码编译/结构与完整性检查，不能证明 Wi-Fi 校准、交换机链路、BL33 加载、overlay 掉电持久化和 Web 恢复均在硬件上通过。首次刷入前须从独立刷入仓库完成备份及实机验证。未经验证不应把预发布固件自动推送到设备上。
 

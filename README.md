@@ -8,6 +8,22 @@
 - [pzcn/wma301-openwrt](https://github.com/pzcn/wma301-openwrt)：原厂 NAND 迁移、首装、FIP 重打包和恢复工具。
 - **这里**：每次从官方 `immortalwrt/immortalwrt` 的 `openwrt-25.12` 分支获取实时 HEAD，使用本仓库设备适配构建两种 FIT 固件。
 
+## 官方 ImageBuilder 快速构建（实验）
+
+新增独立工作流 [official-builder.yml](.github/workflows/official-builder.yml)，
+优先复用官方 ImmortalWrt `25.12-SNAPSHOT/mediatek/filogic`
+已经编译好的内核、驱动、基础软件包和 ImageBuilder。以官方二进制的
+`version.buildinfo` 源码修订为基准，增量注入本设备 DTS、profile、
+网络/MAC/环境/升级逻辑，**只单独编译设备树，不重新编译内核**。
+
+该流程目前仅生成 `squashfs-sysupgrade.itb`，运行当前 FIT/DTS/NAND
+离线校验，仅上传 GitHub Actions 实验 Artifact，不发布 Release，
+也不自动刷入设备。官方配套 SDK 只记录名称和 SHA256，暂未接入缺包补编。
+详情：[官方 Builder 设计与限制](docs/OFFICIAL-IMAGEBUILDER.md)。
+
+**原 `firmware.yml` 完整源码构建、双 FIT 输出和成功才发布的策略均保留，作为后备。**
+新快速路径修改不会触发旧工作流的 push 全量构建。
+
 ## 自动化策略
 
 - GitHub Actions 每天执行一次；未发现上游或本仓库代码变化时不重复编译。

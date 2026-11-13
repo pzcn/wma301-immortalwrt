@@ -1,4 +1,4 @@
-name: WMA301 | Official ImageBuilder fast-path (experimental)
+name: WMA301 | Official ImageBuilder fast-path
 
 on:
   schedule:
@@ -25,7 +25,7 @@ on:
       - 'scripts/test_wma301_ota.py'
       - 'scripts/test_wma301_runtime.py'
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: wma301-official-${{ github.ref }}
   cancel-in-progress: true
@@ -246,7 +246,7 @@ jobs:
             --expected-source "$SOURCE_SHA" --kernel-headers "$HEADERS" \
             --aurora-source "$PWD/aurora-theme"
           echo "BUILDER=$BUILDER" >> "$GITHUB_ENV"
-      - name: Stamp this FIT's exact OTA identity (no publication)
+      - name: Stamp this FIT's exact OTA identity
         run: |
           set -euo pipefail
           IB_SHA="$(python3 -c 'import json; print(json.load(open("official-provenance.json"))["imagebuilder_sha256"])')"
@@ -272,18 +272,77 @@ jobs:
             --ota-stamp "$PWD/wma301-overlay/etc/wma301-ota-release"
           (cd dist && sha256sum -c SHA256SUMS)
           test "$(find dist -maxdepth 1 -name '*.itb' | wc -l)" -eq 1
-          # Exercise the real promotion metadata generator against this FIT.
-          # This preview stays off-Artifact and does not create a Release.
-          python3 scripts/wma301_ota.py metadata --dist dist             --build "$GITHUB_RUN_ID" --source-sha "$GITHUB_SHA"             --channel testing --output "$RUNNER_TEMP/wma301-ota-preview.json"
-      - name: Upload experimental verified FIT (NO Release)
+          # Independently verify the OTA metadata for this real FIT.
+          python3 scripts/wma301_ota.py metadata --dist dist \
+            --build "$GITHUB_RUN_ID" --source-sha "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/wma301-ota-preview.json"
+      - name: Upload verified FIT Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WMA301_OFFICIAL_BUILDER_EXPERIMENT
+          name: WMA301_VERIFIED_FIT
           path: |
             dist/
             official-provenance.json
           if-no-files-found: error
           retention-days: 14
+      - name: Publish verified FIT to single OTA feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = pzcn/wma301-immortalwrt
+          TAG="wma301-ota-r$GITHUB_RUN_ID"
+          IMAGE="immortalwrt-mediatek-filogic-tplink_wma301-v2-squashfs-sysupgrade.itb"
+          mkdir -p ota-release
+          python3 scripts/wma301_ota.py metadata --dist dist \
+            --build "$GITHUB_RUN_ID" --source-sha "$GITHUB_SHA" \
+            --output ota-release/ota.json
+          SOURCE_IMAGE="$(jq -er .source_image ota-release/ota.json)"
+          test -f "dist/$SOURCE_IMAGE"
+          cp "dist/$SOURCE_IMAGE" "ota-release/$IMAGE"
+          SHA256="$(jq -er .image_sha256 ota-release/ota.json)"
+          printf '%s  %s\n' "$SHA256" "$IMAGE" > ota-release/SHA256SUMS
+          (cd ota-release && sha256sum -c SHA256SUMS)
+          cat > ota-release/NOTES.md <<EOF
+          WMA301 v2.0 single-feed OTA build $GITHUB_RUN_ID.
+
+          Automatically published after successful offline FIT and provenance checks.
+          Build: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          Integration commit: $GITHUB_SHA
+
+          Only for migrated 121 MiB single-UBI WMA301 v2.0 devices.
+          Offline verified, not hardware-tested. No automatic upgrades.
+          Manual flash is disabled by default.
+          EOF
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            DRAFT="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+            if [ "$DRAFT" = true ]; then
+              gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber \
+                "ota-release/$IMAGE" ota-release/SHA256SUMS \
+                ota-release/ota.json dist/manifest.json
+            else
+              # An already-published release must never be silently replaced.
+              mkdir -p ota-existing
+              gh release download "$TAG" -R "$GITHUB_REPOSITORY" \
+                --pattern ota.json --dir ota-existing
+              cmp -s ota-release/ota.json ota-existing/ota.json || {
+                echo "::error::Published OTA metadata differs; refusing overwrite."
+                exit 1
+              }
+              echo "OTA build already published: $TAG"
+              exit 0
+            fi
+          else
+            # Draft + all assets before publication. Devices never see drafts.
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --draft --latest=false \
+              --title "WMA301 OTA build $GITHUB_RUN_ID" \
+              --notes-file ota-release/NOTES.md \
+              "ota-release/$IMAGE" ota-release/SHA256SUMS \
+              ota-release/ota.json dist/manifest.json
+          fi
+          gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "Published single-feed OTA: $TAG" >> "$GITHUB_STEP_SUMMARY"
       - name: Summarize official source, cache reuse and artifact safety
         env:
           IB_CACHE: ${{ steps.ib_cache.outputs.cache-hit }}
@@ -301,8 +360,8 @@ jobs:
             printf '| Linux source archive cache hit | %s |\n' "$KERNEL_CACHE"
             echo '| Aurora | v1.4.0 pinned source / prebuilt assets |'
             printf '| OTA build ID | %s |\n' "$GITHUB_RUN_ID"
-            echo '| OTA release | Not published; manual promotion only |'
-            echo '| Output | Experimental sysupgrade FIT (no recovery) |'
+            echo '| OTA feed | Single feed, published on successful fast build |'
+            echo '| Output | Verified sysupgrade FIT (no recovery) |'
             echo '| Hardware validation | Not tested — do not auto-flash |'
             printf '\n[Download verified Artifact](https://github.com/%s/actions/runs/%s)\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -40,18 +40,22 @@ of silently compiling against an unrelated source.
 
 ## Build and artifacts
 
-1. The daily schedule, matching push changes, or a manual dispatch start the **WMA301 | Official ImageBuilder fast-path (experimental)** workflow.
+1. The daily schedule, matching push changes, or a manual dispatch start the **WMA301 | Official ImageBuilder fast-path** workflow.
 2. Offline tests run before downloading the approximately 1 GiB Builder.
 3. The workflow adds the WMA301 profile, local DTS, and WMA301 runtime hooks.
 4. `configs/official-packages.txt` selects packages; `make image PROFILE=tplink_wma301-v2 PACKAGES="..." FILES=...` builds the persistent `squashfs-sysupgrade.itb`.
 5. `verify_official.py` runs the same FIT hash, image contents and NAND/DTS
    checks as `verify.py`.
 
-The workflow uploads only a 14-day GitHub Actions artifact, **not a Release**.
-It caches verified Builder/kernel source archives by SHA256, and skips duplicate
+The workflow uploads a 14-day verified Actions Artifact, then automatically
+publishes an immutable `wma301-ota-r<RunID>` Release in the **single WMA301 OTA
+feed**. No testing/stable selection or manual promotion. Publishing does not
+trigger a router upgrade. Device-side manual flashing remains disabled by default.
+
+It caches verified Builder/kernel source archives by SHA256 and skips duplicate
 scheduled builds with the same Builder + local inputs in the same ISO week.
 Manual runs always rebuild. The original full-source **manual fallback** still
-produces recovery + sysupgrade FITs and retains its pre-release mechanism.
+produces recovery + sysupgrade FITs and retains its separate pre-release mechanism.
 
 See [build plan, schedule, cache policy and maintenance procedure](BUILD-RUNBOOK.md).
 

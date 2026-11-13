@@ -1,6 +1,6 @@
 # WMA301 固件构建：长期计划与操作流程
 
-> 策略：**官方 ImmortalWrt ImageBuilder 优先；只增量编译 WMA301 设备树；完整源码编译作为人工后备。** 不 Fork 上游，不将实验固件自动发布或刷入路由器。
+> 策略：**官方 ImmortalWrt ImageBuilder 优先；只增量编译 WMA301 设备树；完整源码编译作为人工后备。** 不 Fork 上游；快速构建校验通过后自动发布唯一 OTA 固件源，但绝不自动刷入路由器。
 
 ## 一、已验证的基线
 
@@ -20,7 +20,7 @@
 6. 使用 `scripts/official_builder.py` 注入设备 profile、WMA301 DTS、LAN/WAN、MAC、fw_env 和 FIT 升级逻辑，并从**固定 SHA 的 Aurora v1.4.0** 源码复制预编译的 LuCI 主题资源、注册默认主题。**不重新编译 Linux 内核、kmod、工具链，也不为了 Aurora 调用 SDK**。
 7. 从 `configs/official-packages.txt` 读取预装包（允许负号排除包）。只接受规范包名，避免拼接任意 shell 语句。ImageBuilder 从官方配套 APK 仓库安装；缺失包则失败，不混用 SDK 或 ABI。
 8. 生成 `squashfs-sysupgrade.itb`，再运行 `scripts/verify_official.py`，检查 FIT、SquashFS、WMA301 分区范围和只读标志、UBI 根卷，并记录官方版本、本仓库 SHA、所选包及输出 SHA256。
-9. **全部通过且 Artifact 上传成功**之后，写入一条本周成功指纹缓存。失败不标记成功，以便下次自动重试。快速流程只保留 14 天实验 Artifact，**不新建 Release、不执行 sysupgrade、不写闪存**。
+9. **全部通过且 Artifact 上传成功**之后，写入一条本周成功指纹缓存。失败不标记成功，以便下次自动重试。快速流程保留 14 天验证 Artifact，**自动发布唯一 OTA 固件源**，但不执行 sysupgrade、不写闪存。
 
 ```text
 官方索引日检 / 设备代码变动 / 手工运行
@@ -41,7 +41,9 @@
              |
        FIT / DTS / NAND 离线校验
              |
-       实验 Artifact (14 天)
+       验证 Artifact (14 天)
+             |
+       单一 OTA 版本自动发布
              |
        成功指纹写入（仅全部成功）
 ```
@@ -52,14 +54,14 @@
 
 | 流程 | 触发 | 内核来源 | 输出 | 发布 |
 | --- | --- | --- | --- | --- |
-| `official-builder.yml`（默认） | 每日检查 / push / 手动 | 官方 Builder 预编译内核 | sysupgrade FIT | 只上传实验 Artifact |
+| `official-builder.yml`（默认） | 每日检查 / push / 手动 | 官方 Builder 预编译内核 | sysupgrade FIT | Artifact + 自动发布唯一 OTA 版本 |
 | `firmware.yml`（后备） | 手动 `workflow_dispatch` | 最新上游源码完整编译 | recovery + sysupgrade FIT | 原有 pre-release 规则 |
 
 当需要还未进入官方 Builder 的上游修复、需要独立 initramfs-recovery，或者官方 Builder 不含必要驱动时，才使用完整源码后备。官方 Builder 可能比 upstream HEAD 旧，这是主动选择的版本一致性取舍。
 
 ## 四、日常操作 SOP
 
-- **查看每天的检查：** 进入 Actions → “WMA301 | Official ImageBuilder fast-path (experimental)”。metadata/job 显示是否跳过；有构建时从对应 run 下载 `WMA301_OFFICIAL_BUILDER_EXPERIMENT`。
+- **查看每天的检查：** 进入 Actions → “WMA301 | Official ImageBuilder fast-path”。metadata/job 显示是否跳过；有构建时从对应 run 下载 `WMA301_VERIFIED_FIT`，或从 Releases 下载自动发布的 OTA 版本。
 - **手动重跑快速构建：** Actions → 选择上述 workflow → Run workflow。手工运行不会因成功指纹而跳过。
 - **修改包列表：** 编辑 `configs/official-packages.txt`，每行一个包（目前只有 `luci`），用 `-packagename` 排除默认包。能否安装要以同版本官方源为准。
 - **执行完整构建：** Actions → “WMA301 | Follow ImmortalWrt, build and release” → Run workflow。需要强制重新生成相同源码版本时选择 `force=true`。原工作流可能发布预发布双 FIT，操作前先确认来源及用途。
@@ -74,7 +76,7 @@
 
 ## WMA301 独立 OTA
 
-已加入 [OTA.md](OTA.md) 所述的 WMA301 专属更新后端、LuCI 页面及单独的人工 Release 提升流程。快速构建内嵌 GitHub Run ID 和 Builder 哈希，自动日检和实验 Artifact 仍保留；**任何成功构建均不会自动进入 OTA Release 或自动刷写**。首次实机升级、配置持久化及环境卷验收是开放 stable 前的强制步骤。
+已加入 [OTA.md](OTA.md) 所述的 WMA301 专属更新后端、LuCI 页面及唯一 OTA 固件源。快速构建内嵌 GitHub Run ID 和 Builder 哈希，自动日检、验证 Artifact 和自动发布同时保留；**发布不代表实机验收，也不会自动刷写设备**。首次升级、配置持久化及环境卷仍需实机验收。
 
 ## 五、后续研发任务与验收标准
 
@@ -85,13 +87,13 @@
 | P2 | ⬜ 待实施 | 用**匹配官方 Builder 的 SDK**只补编官方没有的第三方 APK | 不修改内核 ABI，不跨源安装；无缺包不下载 SDK |
 | P3 | ⬜ 待研究 | 减少 recovery 的完整源码构建需求 | 如果不能安全复用 initramfs 生成，继续保留完整后备 |
 | P4 | ⬜ 待实机验收 | 启动、LAN/WAN、Wi-Fi 校准、MAC、四 UBI 卷、升级保留配置、SPI-NAND ECC、冷启动及恢复 | 多轮实机升级/断电、存储和环境卷保持一致 |
-| P5 | 🧪 WMA301 专属 OTA 代码已实现，实机未验证 | 独立发布渠道、升级前校验、人工授权；禁止自动升级 | P4 验证后人工发布 stable，绝不自动刷写 |
+| P5 | 🧪 单通道 OTA 代码已实现，实机未验证 | 校验后自动发布、设备升级前检查、人工授权 | 新 CI 发布验收、P4 实机验收；绝不自动刷写 |
 
 ## 六、维护原则
 
 - **不 Fork** 官方 ImmortalWrt，不把设备私有分区数据写入源代码；保留精简适配层。
 - 构建产物全部记录官方 Builder SHA256、上游 commit、设备仓库 commit、包清单、FIT SHA256。
-- 两条工作流不能互相覆盖产物；实验快路径永远不自动部署到路由器。
+- 两条工作流不能互相覆盖产物；快速路径自动发布下载资源，但永远不自动部署到路由器。
 - 优化速度必须以哈希验证、来源一致、UBI 环境卷保护和实机安全为边界，失败优先保留上一成功固件。
 
 更多细节：[OFFICIAL-IMAGEBUILDER.md](OFFICIAL-IMAGEBUILDER.md)。

@@ -39,7 +39,13 @@ def parse_checksums(text: str) -> dict[str, str]:
         if not match:
             continue
         digest, name = match.groups()
-        require("/" not in name and "\\" not in name, "unsafe checksum filename")
+        # Official sha256sums also lists files inside packages/ and kmods/.
+        # Accept safe relative paths, but only consume the exact top-level
+        # Builder and SDK archive names in resolve().
+        parts = name.split("/")
+        require(bool(name) and not name.startswith("/") and
+                "\\" not in name and all(part not in ("", ".", "..") for part in parts),
+                "unsafe checksum filename")
         require(name not in result, f"duplicate checksum entry: {name}")
         result[name] = digest
     return result

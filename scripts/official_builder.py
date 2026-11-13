@@ -119,13 +119,15 @@ def prepare_kernel_image(kdir: Path) -> Path:
     return dest
 
 
-def compile_dtb(builder: Path, kdir: Path, linux: Path) -> Path:
+def compile_dtb(builder: Path, kdir: Path, linux: Path, headers: Path) -> Path:
     dts_dir = builder / "target/linux/mediatek/dts"
     src = dts_dir / f"{DEVICE_DTS}.dts"
     require(src.is_file(), "WMA301 DTS not staged")
     kernel_dts = linux / "arch/arm64/boot/dts"
     dtc = linux / "scripts/dtc/dtc"
     require(dtc.is_file(), "official kernel dtc missing")
+    require((headers / "dt-bindings/gpio/gpio.h").is_file(),
+            "matching kernel dt-bindings headers missing")
     out = kdir / f"image-{DEVICE_DTS}.dtb"
     temp = kdir / f"image-{DEVICE_DTS}.dts.preprocessed"
     cmd = [
@@ -134,7 +136,7 @@ def compile_dtb(builder: Path, kdir: Path, linux: Path) -> Path:
         "-I", str(kernel_dts / "mediatek"),
         "-I", str(kernel_dts),
         "-I", str(kernel_dts / "include"),
-        "-I", str(linux / "include"),
+        "-I", str(headers),
         "-I", str(linux / "scripts/dtc/include-prefixes"),
         "-o", str(temp), str(src),
     ]
@@ -148,7 +150,8 @@ def compile_dtb(builder: Path, kdir: Path, linux: Path) -> Path:
     return out
 
 
-def stage(builder: Path, upstream: Path, overlay: Path, expected_source: str) -> None:
+def stage(builder: Path, upstream: Path, overlay: Path, expected_source: str,
+          headers: Path) -> None:
     require(re.fullmatch(r"[0-9a-f]{40}", expected_source) is not None,
             "expected-source must be a full Git commit SHA")
     actual = subprocess.check_output(
@@ -203,7 +206,7 @@ def stage(builder: Path, upstream: Path, overlay: Path, expected_source: str) ->
     (builder / ".profiles.mk").unlink(missing_ok=True)
 
     kdir, linux = locate_kernel(builder)
-    dtb = compile_dtb(builder, kdir, linux)
+    dtb = compile_dtb(builder, kdir, linux, headers)
     kernel = prepare_kernel_image(kdir)
     print(f"Official kernel reused: {kernel}")
     print(f"Local WMA301 DTB: {dtb}")
@@ -221,12 +224,14 @@ def main() -> None:
     s.add_argument("--upstream", type=Path, required=True)
     s.add_argument("--overlay", type=Path, required=True)
     s.add_argument("--expected-source", required=True)
+    s.add_argument("--kernel-headers", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "resolve":
         print(json.dumps(resolve(args.index, args.output), indent=2))
     else:
         stage(args.builder.resolve(), args.upstream.resolve(),
-              args.overlay.resolve(), args.expected_source)
+              args.overlay.resolve(), args.expected_source,
+              args.kernel_headers.resolve())
 
 
 if __name__ == "__main__":

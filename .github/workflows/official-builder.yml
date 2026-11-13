@@ -251,6 +251,25 @@ jobs:
             official-provenance.json
           if-no-files-found: error
           retention-days: 14
+      - name: Summarize official source, cache reuse and artifact safety
+        env:
+          IB_CACHE: ${{ steps.ib_cache.outputs.cache-hit }}
+          KERNEL_CACHE: ${{ steps.kernel_cache.outputs.cache-hit }}
+          UPSTREAM_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## WMA301 official ImageBuilder result'
+            echo '| Item | Value |'
+            echo '| --- | --- |'
+            printf '| Official upstream commit | %s |\n' "$UPSTREAM_SHA"
+            printf '| Device integration commit | %s |\n' "$GITHUB_SHA"
+            printf '| Builder archive cache hit | %s |\n' "$IB_CACHE"
+            printf '| Linux source archive cache hit | %s |\n' "$KERNEL_CACHE"
+            echo '| Output | Experimental sysupgrade FIT (no recovery) |'
+            echo '| Hardware validation | Not tested — do not auto-flash |'
+            printf '\n[Download verified Artifact](https://github.com/%s/actions/runs/%s)\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Write successful fingerprint after artifact upload
         if: needs.metadata.outputs.previous_success != 'true'
         run: |

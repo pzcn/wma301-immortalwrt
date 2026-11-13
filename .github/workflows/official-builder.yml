@@ -37,8 +37,14 @@ jobs:
         run: |
           set -euo pipefail
           sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/share/dotnet /opt/ghc || true
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq zstd gcc make binutils perl python3 rsync xz-utils curl git unzip file
+          missing=()
+          for tool in zstd gcc cpp make perl python3 rsync xz curl git unzip file gzip; do
+            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+          done
+          if (("${#missing[@]}")); then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq zstd gcc make binutils perl python3 rsync xz-utils curl git unzip file gzip
+          fi
           df -h /
       - name: Resolve exact official binary revision
         id: source

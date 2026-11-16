@@ -35,11 +35,11 @@ jobs:
           FORCE: ${{ inputs.force || 'false' }}
         run: |
           set -euo pipefail
-          sha="$(git ls-remote https://github.com/immortalwrt/immortalwrt.git refs/heads/openwrt-25.12 | cut -f1)"
+          sha="$(git ls-remote https://github.com/immortalwrt/immortalwrt.git refs/heads/master | cut -f1)"
           test -n "$sha"
           u="$(printf '%s' "$sha" | cut -c1-12)"
           l="$(printf '%s' "$GITHUB_SHA" | cut -c1-10)"
-          tag="iw25-$u-$l"
+          tag="iwmaster-$u-$l"
           if [ "$FORCE" = "true" ]; then
             tag="$tag-rebuild$GITHUB_RUN_ID"
           fi
@@ -76,6 +76,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/prepare.py scripts/verify.py scripts/fit_inspect.py scripts/aurora.py
           python3 scripts/test_layout.py
+          python3 scripts/test_master_migration.py
           python3 scripts/test_arthur_packages.py
           python3 scripts/test_aurora.py
           python3 scripts/test_stage_files.py
@@ -88,7 +89,7 @@ jobs:
       - name: Clone current upstream (no permanent SHA lock)
         run: |
           set -euo pipefail
-          git clone --depth=1 --branch openwrt-25.12 \
+          git clone --depth=1 --branch master \
             https://github.com/immortalwrt/immortalwrt.git upstream
           actual="$(git -C upstream rev-parse HEAD)"
           test "$actual" = "$UPSTREAM_SHA" || {
@@ -126,9 +127,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: upstream/dl
-          key: iw25-wma301-dl-${{ runner.os }}-${{ hashFiles('configs/wma301.config') }}
+          key: iwmaster-wma301-dl-${{ runner.os }}-${{ hashFiles('configs/wma301.config') }}
           restore-keys: |
-            iw25-wma301-dl-${{ runner.os }}-
+            iwmaster-wma301-dl-${{ runner.os }}-
       - name: Resolve feeds and device config
         working-directory: upstream
         run: |

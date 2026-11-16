@@ -1,4 +1,6 @@
-# WMA301 v2.0 · ImmortalWrt (upstream-tracking)
+# WMA301 v2.0 · ImmortalWrt master (Linux 6.18)
+
+> **迁移测试分支：** 官方 `master` 及其 6.18 内核；快速构建使用匹配的 `snapshots/targets/mediatek/filogic` 二进制及对应源码 SHA，完整构建使用最新 `master` HEAD。它们的内核小版本可能不同，绝不混装 kmod/APK。尚未通过实机验证，不应自动刷写。见 [迁移说明](docs/MASTER-MIGRATION.md)。
 
 只维护 **TP-Link WMA301 v2.0** 的固件适配，不 fork ImmortalWrt，不维护第三套 U-Boot，不锁定 ImmortalWrt 的 commit。
 
@@ -6,7 +8,7 @@
 
 - [pzcn/bl-mt798x-dhcpd](https://github.com/pzcn/bl-mt798x-dhcpd/tree/wma301)：自定义 Yuzhii BL33 / Web / DHCP。
 - [pzcn/wma301-openwrt](https://github.com/pzcn/wma301-openwrt)：原厂 NAND 迁移、首装、FIP 重打包和恢复工具。
-- **这里**：优先利用官方 `25.12-SNAPSHOT/mediatek/filogic` 已编译的内核、驱动和软件包，快速生成 sysupgrade FIT；必要时手工执行最新 HEAD 完整源码构建，得到双 FIT。
+- **这里**：优先利用官方 `snapshots/targets/mediatek/filogic` 已编译的内核、驱动和软件包，快速生成 sysupgrade FIT；必要时手工执行最新 HEAD 完整源码构建，得到双 FIT。
 
 ## 构建策略：官方 ImageBuilder 优先
 
@@ -67,7 +69,7 @@ UBI 中使用 `fit`（本项目的 SquashFS FIT）、`ubootenv`、`ubootenv2`、
 ## 手工构建
 
 ```sh
-git clone --depth=1 --branch openwrt-25.12 https://github.com/immortalwrt/immortalwrt.git upstream
+git clone --depth=1 --branch master https://github.com/immortalwrt/immortalwrt.git upstream
 python3 scripts/prepare.py --upstream upstream
 (cd upstream && ./scripts/feeds update -a && ./scripts/feeds install -a)
 cp configs/wma301.config upstream/.config

@@ -23,8 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "tplink_wma301-v2"
 COMPATIBLE = "tplink,wma301-v2"
 DEVICE_DTS = "mt7981b-tplink-wma301-v2"
-IMAGEBUILDER = "immortalwrt-imagebuilder-25.12-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
-SDK_RE = re.compile(r"immortalwrt-sdk-25\.12-SNAPSHOT-mediatek-filogic_[^/\s]+\.tar\.zst")
+IMAGEBUILDER = "immortalwrt-imagebuilder-mediatek-filogic.Linux-x86_64.tar.zst"
+SDK_RE = re.compile(r"immortalwrt-sdk-mediatek-filogic_[^/\s]+\.tar\.zst")
 VERSION_RE = re.compile(r"r\d+-([0-9a-f]{10,40})")
 HASH_RE = re.compile(r"([0-9a-f]{64})\s+[*]?(\S+)")
 
@@ -82,7 +82,7 @@ def resolve(index: Path, output: Path) -> dict:
     require(len(sdk_files) <= 1, "ambiguous official SDK files")
     doc = {
         "schema": 1,
-        "source": "ImmortalWrt 25.12-SNAPSHOT (official binaries)",
+        "source": "ImmortalWrt master SNAPSHOT (official binaries)",
         "target": "mediatek/filogic",
         "version": version,
         "source_revision": match.group(1),

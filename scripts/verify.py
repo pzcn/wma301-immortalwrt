@@ -126,7 +126,7 @@ def build(images:Path,out:Path,upstream_sha:str,local_sha:str):
     for p in (recovery[0],sysupgrade[0]):
         (out/p.name).write_bytes(p.read_bytes())
     manifest={
-        "source":"immortalwrt/immortalwrt","branch":"openwrt-25.12",
+        "source":"immortalwrt/immortalwrt","branch":"master",
         "upstream_sha":upstream_sha,"local_sha":local_sha,
         "board":"tplink,wma301-v2","review_status":"OFFLINE_VALIDATED_HARDWARE_UNTESTED",
         "outputs":files,

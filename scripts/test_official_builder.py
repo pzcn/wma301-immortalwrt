@@ -34,16 +34,17 @@ def run() -> None:
         root = Path(d)
         index = root / "index"
         index.mkdir()
-        (index / "version.buildinfo").write_text("r37851-5273c13600\n")
+        (index / "version.buildinfo").write_text("r42542-e695009c15\n")
         (index / "sha256sums").write_text(
             f"{digest}  {IMAGEBUILDER}\n"
-            f"{digest}  immortalwrt-sdk-25.12-SNAPSHOT-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst\n"
+            f"{digest}  immortalwrt-sdk-mediatek-filogic_gcc-14.4.0_musl.Linux-x86_64.tar.zst\n"
         )
         output = root / "provenance.json"
         metadata = resolve(index, output)
-        assert metadata["source_revision"] == "5273c13600"
+        assert metadata["source_revision"] == "e695009c15"
         assert metadata["imagebuilder_sha256"] == digest
         assert metadata["sdk_sha256"] == digest
+        assert metadata["source"] == "ImmortalWrt master SNAPSHOT (official binaries)"
         assert json.loads(output.read_text()) == metadata
         (index / "version.buildinfo").write_text("invalid\n")
         try:
@@ -94,7 +95,7 @@ def run() -> None:
 
         builder = root / "builder"
         kdir = builder / "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
-        linux = kdir / "linux-6.12.116"
+        linux = kdir / "linux-6.18.55"
         (linux / "arch/arm64/boot/dts/mediatek").mkdir(parents=True)
         (linux / "arch/arm64/boot/dts/mediatek/mt7981b.dtsi").touch()
         (kdir / "Image").write_bytes(os.urandom(220_000))

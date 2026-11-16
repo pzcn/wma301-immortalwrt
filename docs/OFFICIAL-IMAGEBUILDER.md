@@ -1,7 +1,9 @@
-# WMA301 official ImageBuilder fast-path
+# WMA301 official ImageBuilder fast-path (master / 6.18)
+
+> Migration 2026-11-16: the master snapshot ImageBuilder/SDK archive names have no 25.12 prefix. Use `https://downloads.immortalwrt.org/snapshots/targets/mediatek/filogic/` and the exact snapshot's source SHA, not an unrelated live master HEAD.
 
 The experimental workflow [official-builder.yml](../.github/workflows/official-builder.yml)
-reuses upstream **ImmortalWrt 25.12-SNAPSHOT / mediatek/filogic** binaries.
+reuses upstream **ImmortalWrt master SNAPSHOT / mediatek/filogic** binaries.
 The original [firmware.yml](../.github/workflows/firmware.yml) remains an
 independent full-source build fallback and still produces both recovery and
 sysupgrade FIT images.
@@ -30,7 +32,7 @@ upstream firmware are left untouched.
 
 The official kernel's `include/dt-bindings` headers are obtained from
 kernel.org using the **exact kernel tarball SHA256 specified by upstream**
-`target/linux/generic/kernel-6.12`. The ImageBuilder supplies the matching
+`target/linux/generic/kernel-6.18`. The ImageBuilder supplies the matching
 already-compiled kernel Image, kernel DT sources and dtc.
 
 Do not substitute a newer SDK, kernel, kmod feed, or HEAD checkout for the
@@ -41,7 +43,7 @@ of silently compiling against an unrelated source.
 ## Build and artifacts
 
 1. The daily schedule, matching push changes, or a manual dispatch start the **WMA301 | Official ImageBuilder fast-path** workflow.
-2. Offline tests run before downloading the approximately 1 GiB Builder.
+2. Offline tests run before downloading the approximately 2.1 GiB Builder (snapshot as of 2026-10-21; size varies).
 3. The workflow adds the WMA301 profile, local DTS, and WMA301 runtime hooks.
 4. `configs/official-packages.txt` selects packages; `make image PROFILE=tplink_wma301-v2 PACKAGES="..." FILES=...` builds the persistent `squashfs-sysupgrade.itb`.
 5. `verify_official.py` runs the same FIT hash, image contents and NAND/DTS

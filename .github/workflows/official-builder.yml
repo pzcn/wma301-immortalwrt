@@ -8,6 +8,14 @@ on:
   schedule:
     - cron: '41 2 * * *'
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/official-builder.yml'
+      - 'scripts/**'
+      - 'device/**'
+      - 'configs/**'
+      - 'files/**'
   push:
     branches: [main]
     paths:
@@ -39,7 +47,7 @@ jobs:
   metadata:
     runs-on: ubuntu-24.04
     env:
-      BASE: https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/mediatek/filogic
+      BASE: https://downloads.immortalwrt.org/snapshots/targets/mediatek/filogic
     outputs:
       ib_sha: ${{ steps.resolve.outputs.ib_sha }}
       fingerprint: ${{ steps.fingerprint.outputs.key }}
@@ -60,13 +68,13 @@ jobs:
       - name: Fingerprint official archive, local inputs and ISO week
         id: fingerprint
         env:
-          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/stage_files.py', 'scripts/test_stage_files.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'scripts/aurora.py', 'scripts/test_aurora.py', 'scripts/wma301_ota.py', 'scripts/test_wma301_ota.py', 'scripts/test_wma301_runtime.py', 'files/**', '.github/workflows/official-builder.yml') }}
+          INPUT_SHA: ${{ hashFiles('device/**', 'configs/official-packages.txt', 'scripts/official_builder.py', 'scripts/stage_files.py', 'scripts/test_stage_files.py', 'scripts/prepare.py', 'scripts/verify_official.py', 'scripts/verify.py', 'scripts/fit_inspect.py', 'scripts/test_official_builder.py', 'scripts/test_master_migration.py', 'scripts/test_layout.py', 'scripts/test_arthur_packages.py', 'scripts/aurora.py', 'scripts/test_aurora.py', 'scripts/wma301_ota.py', 'scripts/test_wma301_ota.py', 'scripts/test_wma301_runtime.py', 'files/**', '.github/workflows/official-builder.yml') }}
           IB_SHA: ${{ steps.resolve.outputs.ib_sha }}
         run: |
           set -euo pipefail
           test -n "$INPUT_SHA"
           week="$(date -u +%G-W%V)"
-          echo "key=wma301-fast-ok-v1-$IB_SHA-$INPUT_SHA-$week" >> "$GITHUB_OUTPUT"
+          echo "key=wma301-fast-master-ok-v1-$IB_SHA-$INPUT_SHA-$week" >> "$GITHUB_OUTPUT"
       - name: Lookup successful fingerprint without downloading cache
         uses: actions/cache/restore@v4
         id: previous
@@ -96,6 +104,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/official_builder.py scripts/stage_files.py scripts/verify_official.py scripts/aurora.py
           python3 scripts/test_official_builder.py
+          python3 scripts/test_master_migration.py
           python3 scripts/test_stage_files.py
           python3 scripts/test_aurora.py
           python3 scripts/test_wma301_ota.py
@@ -115,10 +124,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      BASE: https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/mediatek/filogic
+      BASE: https://downloads.immortalwrt.org/snapshots/targets/mediatek/filogic
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+      - name: Free unused disk for 6.18 master ImageBuilder
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/share/dotnet /opt/ghc || true
+          df -h /
       - name: Verify runner tools
         run: |
           set -euo pipefail
@@ -151,8 +165,8 @@ jobs:
         id: ib_cache
         name: Restore checksum-keyed official ImageBuilder
         with:
-          path: downloads/immortalwrt-imagebuilder-25.12-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst
-          key: wma301-ib-v1-${{ runner.os }}-${{ needs.metadata.outputs.ib_sha }}
+          path: downloads/immortalwrt-imagebuilder-mediatek-filogic.Linux-x86_64.tar.zst
+          key: wma301-ib-master-v1-${{ runner.os }}-${{ needs.metadata.outputs.ib_sha }}
       - name: Download missing Builder and always verify SHA256
         run: |
           set -euo pipefail
@@ -168,8 +182,8 @@ jobs:
         name: Save verified ImageBuilder archive
         if: steps.ib_cache.outputs.cache-hit != 'true'
         with:
-          path: downloads/immortalwrt-imagebuilder-25.12-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst
-          key: wma301-ib-v1-${{ runner.os }}-${{ needs.metadata.outputs.ib_sha }}
+          path: downloads/immortalwrt-imagebuilder-mediatek-filogic.Linux-x86_64.tar.zst
+          key: wma301-ib-master-v1-${{ runner.os }}-${{ needs.metadata.outputs.ib_sha }}
       - name: Extract official ImageBuilder
         run: |
           set -euo pipefail
@@ -191,10 +205,11 @@ jobs:
         id: kernel
         run: |
           set -euo pipefail
-          KFILE=upstream/target/linux/generic/kernel-6.12
-          PATCH="$(sed -nE 's/^LINUX_VERSION-6\.12 = \.([0-9]+)$/\1/p' "$KFILE")"
+          test "$(sed -n 's/^KERNEL_PATCHVER:=//p' upstream/target/linux/mediatek/Makefile)" = 6.18
+          KFILE=upstream/target/linux/generic/kernel-6.18
+          PATCH="$(sed -nE 's/^LINUX_VERSION-6\.18 = \.([0-9]+)$/\1/p' "$KFILE")"
           [[ "$PATCH" =~ ^[0-9]+$ ]]
-          VERSION="6.12.$PATCH"
+          VERSION="6.18.$PATCH"
           EXPECTED="$(awk -F' = ' -v key="LINUX_KERNEL_HASH-$VERSION" '$1 == key {print $2}' "$KFILE")"
           [[ "$EXPECTED" =~ ^[a-f0-9]{64}$ ]]
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -299,7 +314,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Publish verified FIT to single OTA feed
-        if: env.WMA301_ENABLE_OTA == 'true'
+        if: env.WMA301_ENABLE_OTA == 'true' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

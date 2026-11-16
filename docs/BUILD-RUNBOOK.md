@@ -1,5 +1,7 @@
 # WMA301 固件构建：长期计划与操作流程
 
+> **master/6.18 迁移说明（2026-11-16）：** 下文 2026-11-13 成功的 CI 运行属于此前的 25.12 路线，不代表 6.18 已构建或实机验证。新快构建以官方 `snapshots/targets/mediatek/filogic` 的 SHA256、版本信息和 6.18 内核为准；完整构建跟踪 `master` HEAD。详见 [迁移检查单](MASTER-MIGRATION.md)。
+
 > 策略：**官方 ImmortalWrt ImageBuilder 优先；只增量编译 WMA301 设备树；完整源码编译作为人工后备。** 不 Fork 上游；快速构建校验通过后上传验证 Artifact；OTA 功能及其自动发布目前默认屏蔽，代码保留。
 
 ## 一、已验证的基线
@@ -12,7 +14,7 @@
 
 ## 二、默认自动构建（本轮实施）
 
-1. `.github/workflows/official-builder.yml` 每天读取官方 25.12-SNAPSHOT 的 `mediatek/filogic/version.buildinfo` 和 `sha256sums`，解析 ImageBuilder 的真实 SHA256。
+1. `.github/workflows/official-builder.yml` 每天读取官方 master SNAPSHOT 的 `mediatek/filogic/version.buildinfo` 和 `sha256sums`，解析 ImageBuilder 的真实 SHA256。
 2. 计算指纹：**官方 Builder SHA256 + 本仓库与固件有关文件的内容哈希 + ISO 周次**。定时检查发现本周相同指纹已经**成功**，跳过重打包；官方固件、设备树、脚本或包清单变化立即触发；手工触发始终重新执行。每周至少生成一次新 Artifact，以免 14 天有效期内缺少可下载测试产物。
 3. 需要构建时，从 GitHub Actions Cache 精确恢复对应 SHA256 的官方 ImageBuilder 归档；未命中再下载，命中后也**必须再次做 SHA256 检查**。不以 `latest` 或未校验的分支名缓存内核。
 4. 重新读取官方索引，如与第一阶段的 Builder SHA256 不一致则终止，避免上游发布过程中的快照竞争。
@@ -50,7 +52,7 @@
 
 ## 三、完整源码后备
 
-`.github/workflows/firmware.yml` 保留原有最新版 `openwrt-25.12` HEAD 源码编译、双 FIT、离线验证和 pre-release 发布机制，但**取消原来的每日及 push 自动全量构建**，改为 Actions 页面手工触发。
+`.github/workflows/firmware.yml` 保留原有最新版 `master` HEAD 源码编译、双 FIT、离线验证和 pre-release 发布机制，但**取消原来的每日及 push 自动全量构建**，改为 Actions 页面手工触发。
 
 | 流程 | 触发 | 内核来源 | 输出 | 发布 |
 | --- | --- | --- | --- | --- |

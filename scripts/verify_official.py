@@ -31,6 +31,8 @@ def verify_fast(images: Path, output: Path, provenance: Path, local_sha: str,
     source = json.loads(provenance.read_text())
     if source.get("target") != "mediatek/filogic":
         raise ValueError("wrong official ImageBuilder target")
+    if source.get("source") != "ImmortalWrt master SNAPSHOT (official binaries)":
+        raise ValueError("wrong ImmortalWrt upstream channel")
     if not re.fullmatch(r"[0-9a-f]{40}", local_sha):
         raise ValueError("invalid local commit")
     if aurora_overlay is not None:

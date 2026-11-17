@@ -27,16 +27,6 @@
 完整取舍说明：[亚瑟软件同步清单](docs/ARTHUR-SOFTWARE.md)。
 
 
-## WMA301 网口盲插与首页 WAN 选择
-
-WMA301 的四个 MT7531 DSA 设备名是 `lan1`、`lan2`、`lan3`、`wan`。在 LuCI **状态 → 概览 → 端口状态** 使用原生网口图标、链路、速率及流量 UI，仅增加「WAN 网口选择」和「应用」按钮。可选「自动识别（默认）」或固定网口 1/2/3/4；当前暂用逻辑编号依次映射 `lan1/lan2/lan3/wan`，**必须在实机上核实与外壳物理顺序一致后再视为最终面板编号**。
-
-自动识别在启动、WAN PHY 断开或无 WAN 状态下有新端口连线时探测候选端口的 DHCP 租约；DHCP 回调需要 IP 与网关。依次将候选端口短暂从 LAN 网桥隔离，其他端口保持原位；第一个有效 DHCP 上联成为 WAN，其他端口加入 LAN；WAN PHY 持续在线时锁定，不因断网或其他端口插线抢占。没有 DHCP 上联时四口归 LAN，便于管理。PPPoE/静态地址可通过手动指定端口使用，端口切换不修改 `network.wan.proto`。
-
-运行后端：`/usr/sbin/wma301-ports`，服务：`/etc/init.d/wma301-ports`，配置：`/etc/config/wma301-ports`。设置会调整 `network.wan.device` 与 `br-lan` 成员（WAN6 若绑定 `@wan` 则保留别名）。只对 WMA301 v2 生效，默认两条构建路径都包含该功能，无需重新编译内核。
-
-**风险和验证：** 当前是未做设备现场联调的开发实现。自动探测需在候选物理口上暂时断开网桥；手动把正在使用的管理口设为 WAN 可能导致管理连接断开。未经真实 DSA 硬件、四口逐一插线、LAN DHCP 隔离、IPv6 和有线管理回退测试，不应直接用于生产或当作已验证固件发布。状态模块来自 ImmortalWrt 当前 `29_ports.js`，上游 LuCI 升级时应重新检查差异。
-
 ## Aurora 主题
 
 默认使用与亚瑟相同的 [Aurora v1.4.0](https://github.com/eamonxg/luci-theme-aurora/tree/v1.4.0)，源码提交锁定为 `84c27b66952e6fc4be60128067a6b88bfd34afb5`；**不会锁定 ImmortalWrt 上游版本**。首次启动自动注册并默认选中 Aurora，保留官方 Bootstrap 供故障回退，且不覆盖已保存的其他主题选择。

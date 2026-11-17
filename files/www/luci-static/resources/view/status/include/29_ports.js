@@ -500,7 +500,10 @@ return baseclass.extend({
 			statsContent.push(E('span', { 'class': 'cbi-tooltip' }, formatStats(port.netdev, pse)));
 
 			return E('div', { 'class': 'ifacebox', 'style': 'margin:.25em;width:100px' }, [
-				E('div', { 'class': 'ifacebox-head', 'style': 'font-weight:bold' }, [ port.netdev.getName() ]),
+				E('div', { 'class': 'ifacebox-head', 'style': 'font-weight:bold' }, [
+					port.netdev.getName(),
+					' (' + (port.netdev.getName() === wanState.active ? 'WAN' : 'LAN') + ')'
+				]),
 				E('div', { 'class': 'ifacebox-body' }, [
 					E('img', { 'src': L.resource('icons/port_%s.svg').format(portIcon) }),
 					E('br'),
@@ -588,7 +591,7 @@ return baseclass.extend({
 			if (res.code !== 0)
 				throw new Error(res.stderr || '无法修改 WAN 网口');
 			this.pendingWanMode = null;
-			ui.addNotification(null, E('p', {}, 'WAN 网口设置已更新。'));
+			ui.addNotification(null, E('p', {}, 'WAN 选择已保存，系统正在调整网口。'));
 		}).catch((err) => {
 			ui.addNotification(null, E('p', {}, err.message || String(err)), 'error');
 		});

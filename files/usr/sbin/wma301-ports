@@ -146,21 +146,20 @@ scan() {
     # Never leave ports detached when a mode change terminates the daemon.
     trap 'restore_kernel_bridge; rmdir "$LOCK_DIR" 2>/dev/null || true; exit 0' HUP INT TERM
     log "starting isolated DHCP uplink discovery"
-    # Isolate *all* ports before probing: other bridged ports must not relay
-    # a DHCP offer to a candidate and cause a false WAN selection.
-    for p in $PORTS; do
-        exists "$p" || continue
-        ip link set dev "$p" nomaster 2>/dev/null || true
-        ip link set dev "$p" up 2>/dev/null || true
-    done
-    sleep 1
+    # Probe one port at a time, isolated from br-lan.  Keep every
+    # *other* LAN port up throughout the scan; a full-bridge teardown
+    # would disconnect all clients whenever an uplink is plugged in.
     for p in $PORTS; do
         exists "$p" && carrier "$p" || continue
+        ip link set dev "$p" nomaster 2>/dev/null || true
+        ip link set dev "$p" up 2>/dev/null || true
+        sleep 1
         if probe_dhcp "$p"; then
             found="$p"
             log "DHCP uplink detected on $p"
             break
         fi
+        restore_kernel_bridge
     done
     if ! apply_port "$found"; then
         log "cannot apply scanned WAN=$found"

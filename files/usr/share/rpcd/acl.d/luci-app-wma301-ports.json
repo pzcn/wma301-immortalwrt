@@ -1,0 +1,24 @@
+{
+  "luci-app-wma301-ports": {
+    "description": "WMA301 dashboard WAN port choice and port status",
+    "read": {
+      "file": {
+        "/usr/sbin/wma301-ports status": [
+          "exec"
+        ]
+      },
+      "ubus": {
+        "luci": [
+          "getBuiltinEthernetPorts"
+        ]
+      }
+    },
+    "write": {
+      "file": {
+        "/usr/sbin/wma301-ports set *": [
+          "exec"
+        ]
+      }
+    }
+  }
+}

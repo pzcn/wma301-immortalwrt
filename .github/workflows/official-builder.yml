@@ -127,7 +127,9 @@ jobs:
 
   fast-build:
     needs: [metadata, offline-tests]
-    if: needs.metadata.outputs.required == 'true'
+    # PRs validate offline contracts without rebuilding a whole firmware image.
+    # The fast-path firmware build runs after merging or on explicit dispatch.
+    if: needs.metadata.outputs.required == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:

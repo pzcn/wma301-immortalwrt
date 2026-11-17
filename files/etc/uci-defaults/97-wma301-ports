@@ -1,0 +1,6 @@
+#!/bin/sh
+[ "$(cat /tmp/sysinfo/board_name 2>/dev/null)" = "tplink,wma301-v2" ] || exit 0
+[ -f /etc/config/wma301-ports ] || exit 0
+/etc/init.d/wma301-ports enable
+/etc/init.d/wma301-ports start
+exit 0

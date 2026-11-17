@@ -39,14 +39,7 @@ def stage_files(source: Path, overlay: Path, *, include_ota: bool | None = None)
             raise ValueError(f"custom overlay clashes with board file: {rel}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(item, dest)
-        # GitHub Contents API stores newly created overlay scripts as 0644.
-        # Ensure procd, DHCP callback and backend are executable.
-        executable = {
-            "etc/init.d/wma301-ports",
-            "usr/sbin/wma301-ports",
-            "usr/libexec/wma301-ports-dhcp-probe",
-        }
-        if rel.parts[:2] == ("etc", "uci-defaults") or rel.as_posix() in executable:
+        if rel.parts[:2] == ("etc", "uci-defaults"):
             dest.chmod(dest.stat().st_mode | 0o111)
         staged.append(rel.as_posix())
     return staged
